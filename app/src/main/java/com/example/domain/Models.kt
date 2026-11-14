@@ -82,7 +82,9 @@ data class ExerciseDefinition(
     val regions: List<String>,
     val keywords: String,
     val isBodyweight: Boolean = false,
-    val isCustom: Boolean = false
+    val isCustom: Boolean = false,
+    val category: String = "strength",
+    val instructions: List<String> = emptyList()
 )
 
 data class SplitPreset(

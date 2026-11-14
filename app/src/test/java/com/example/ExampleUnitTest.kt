@@ -3,6 +3,7 @@ package com.example
 import com.example.data.BackupManager
 import com.example.domain.BodyMeasurements
 import com.example.domain.BodyWeightEntry
+import com.example.domain.DraftSet
 import com.example.domain.ExerciseCatalog
 import com.example.domain.ExerciseDefinition
 import com.example.domain.GymFeeRecord
@@ -12,7 +13,9 @@ import com.example.domain.RpeRating
 import com.example.domain.UserProfile
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
+import com.example.ui.viewmodel.WorkoutTrackerViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -25,7 +28,10 @@ class ExampleUnitTest {
     assertEquals("2025-06-01", WorkoutMath.isoOffsetMonths(1, "2025-05-01"))
     assertEquals(Triple(2025, 5, 11), WorkoutMath.yearMonthDay("2025-05-11"))
     assertEquals("2025-05-09", WorkoutMath.isoOf(2025, 5, 9))
-    assertEquals("yesterday", WorkoutMath.formatAgo("2025-05-10", "2025-05-11"))
+    assertEquals("today", WorkoutMath.formatAgo("2025-05-11", "2025-05-11"))
+    assertEquals("1 day ago", WorkoutMath.formatAgo("2025-05-10", "2025-05-11"))
+    assertEquals("7 days ago", WorkoutMath.formatAgo("2025-05-04", "2025-05-11"))
+    assertEquals("21 days ago", WorkoutMath.formatAgo("2025-04-20", "2025-05-11"))
 
     val ex = LoggedExercise(
       id = 1L,
@@ -35,7 +41,26 @@ class ExampleUnitTest {
     )
     assertEquals(1120.0, WorkoutMath.exerciseVolume(ex), 0.01)
     assertEquals("1.1 t", WorkoutMath.formatVolume(1120.0))
+    assertEquals("2 sets × 8 reps · 70 kg", WorkoutMath.formatSetSummary(ex))
     assertTrue(WorkoutMath.estimateCalories(listOf("Push"), 60, 75.0) > 350)
+
+    val pyramidEx = LoggedExercise(
+      id = 2L,
+      name = "Lat pulldown",
+      equipment = "Machine",
+      sets = listOf(
+        LoggedSet(reps = 15, weightKg = 45.0),
+        LoggedSet(reps = 12, weightKg = 45.0),
+        LoggedSet(reps = 10, weightKg = 45.0)
+      )
+    )
+    assertEquals("15 / 12 / 10 reps · 45 kg", WorkoutMath.formatSetSummary(pyramidEx))
+    assertEquals(listOf("Set 1: 15 reps · 45 kg", "Set 2: 12 reps · 45 kg", "Set 3: 10 reps · 45 kg"), WorkoutMath.formatSetPills(pyramidEx))
+
+    assertEquals("12", WorkoutTrackerViewModel.nextPyramidReps(listOf(DraftSet("15", "20"))))
+    assertEquals("10", WorkoutTrackerViewModel.nextPyramidReps(listOf(DraftSet("15", "20"), DraftSet("12", "20"))))
+    assertEquals("8", WorkoutTrackerViewModel.nextPyramidReps(listOf(DraftSet("15", "20"), DraftSet("12", "20"), DraftSet("10", "20"))))
+    assertNull(WorkoutTrackerViewModel.nextPyramidReps(listOf(DraftSet("21", "10"), DraftSet("21", "10"), DraftSet("21", "10"))))
   }
 
   @Test

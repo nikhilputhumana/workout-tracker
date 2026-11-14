@@ -127,6 +127,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         val draft = uiState.activeDraft
+        val hasOngoingWorkout = draft != null
         if (draft != null) {
             item {
                 BorderedCard(
@@ -172,16 +173,17 @@ fun HomeScreen(
             }
         }
 
-        // Primary Create Workout CTA
+        // Primary Create Workout CTA (blocked while a workout is already in progress)
         item {
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = palette.brand,
-                shadowElevation = 2.dp,
+                color = if (hasOngoingWorkout) palette.subtle else palette.brand,
+                border = if (hasOngoingWorkout) BorderStroke(1.dp, palette.border) else null,
+                shadowElevation = if (hasOngoingWorkout) 0.dp else 2.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(8.dp))
-                    .clickable(onClick = onCreateWorkout)
+                    .clickable(enabled = !hasOngoingWorkout, onClick = onCreateWorkout)
                     .testTag("home_create_workout_button")
             ) {
                 Row(
@@ -193,32 +195,39 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(Color.White.copy(alpha = 0.18f)),
+                            .background(
+                                if (hasOngoingWorkout) palette.border
+                                else Color.White.copy(alpha = 0.18f)
+                            ),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Add,
                             contentDescription = "Create workout",
-                            tint = Color.White,
+                            tint = if (hasOngoingWorkout) palette.faint else Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Create workout",
+                            text = if (hasOngoingWorkout) "Workout already active" else "Create workout",
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White
+                            color = if (hasOngoingWorkout) palette.muted else Color.White
                         )
                         Text(
-                            text = WorkoutMath.formatLong(todayIso),
+                            text = if (hasOngoingWorkout) {
+                                "Finish or discard your active workout before starting a new one."
+                            } else {
+                                WorkoutMath.formatLong(todayIso)
+                            },
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.85f)
+                            color = if (hasOngoingWorkout) palette.faint else Color.White.copy(alpha = 0.85f)
                         )
                     }
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = if (hasOngoingWorkout) palette.faint else Color.White
                     )
                 }
             }
@@ -282,32 +291,38 @@ fun HomeScreen(
                     ) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = palette.brandSoft,
-                            border = BorderStroke(1.dp, palette.brandBd),
+                            color = if (hasOngoingWorkout) palette.subtle else palette.brandSoft,
+                            border = BorderStroke(
+                                1.dp,
+                                if (hasOngoingWorkout) palette.border else palette.brandBd
+                            ),
                             modifier = Modifier
                                 .weight(1f)
                                 .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable { onStartSuggestedSplit(preset) }
+                                .clickable(enabled = !hasOngoingWorkout) { onStartSuggestedSplit(preset) }
                                 .testTag("home_start_suggested_button")
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Text(
-                                    text = "Start ${preset.name}",
+                                    text = if (hasOngoingWorkout) "Workout in progress" else "Start ${preset.name}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    color = palette.brandInk
+                                    color = if (hasOngoingWorkout) palette.faint else palette.brandInk
                                 )
                             }
                         }
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = palette.surface,
-                            border = BorderStroke(1.dp, palette.borderStrong),
+                            color = if (hasOngoingWorkout) palette.subtle else palette.surface,
+                            border = BorderStroke(
+                                1.dp,
+                                if (hasOngoingWorkout) palette.border else palette.borderStrong
+                            ),
                             modifier = Modifier
                                 .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable(onClick = onCreateWorkout)
+                                .clickable(enabled = !hasOngoingWorkout, onClick = onCreateWorkout)
                                 .testTag("home_choose_groups_button")
                         ) {
                             Box(
@@ -318,7 +333,7 @@ fun HomeScreen(
                                     text = "Choose",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Medium,
-                                    color = palette.text2
+                                    color = if (hasOngoingWorkout) palette.faint else palette.text2
                                 )
                             }
                         }

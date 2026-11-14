@@ -28,6 +28,7 @@ import com.example.domain.ToastTone
 import com.example.domain.UserProfile
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.Locale
 import java.util.UUID
 
 data class MainUiState(
@@ -60,15 +63,29 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     private val database = WorkoutDatabase.getInstance(application)
     private val prefsRepo = PreferencesRepository(application)
     private val repository = WorkoutRepository(database.workoutDao(), prefsRepo)
-    private val aiRepository = ExerciseAiRepository()
+    private val aiRepository = ExerciseAiRepository(application)
 
     private val _activeDraft = MutableStateFlow<ActiveDraft?>(null)
     private val _aiState = MutableStateFlow<AiLookupState>(AiLookupState.Idle)
     private val _toast = MutableStateFlow<ToastBanner?>(null)
     private val _showLaunchSplash = MutableStateFlow(true)
+    private val _bundledExercises = MutableStateFlow<List<ExerciseDefinition>>(emptyList())
 
     private var timerJob: Job? = null
     private var toastJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            val loaded = withContext(Dispatchers.IO) {
+                val builtInNames = ExerciseCatalog.BUILT_IN_EXERCISES
+                    .map { it.name.lowercase(Locale.US) }
+                    .toSet()
+                ExerciseCatalog.loadAssetExercises(application)
+                    .filter { it.name.lowercase(Locale.US) !in builtInNames }
+            }
+            _bundledExercises.value = loaded
+        }
+    }
 
     val uiState: StateFlow<MainUiState> = combine(
         combine(
@@ -82,19 +99,29 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         combine(
             repository.sessionsFlow,
             repository.bodyWeightFlow,
-            repository.customExercisesFlow
-        ) { sessions, bw, custom ->
-            Triple(sessions, bw, custom)
+            repository.customExercisesFlow,
+            _bundledExercises
+        ) { sessions, bw, custom, bundled ->
+            listOf(sessions, bw, custom, bundled)
         },
         _activeDraft,
         _aiState,
         combine(_toast, _showLaunchSplash) { toast, splash -> toast to splash }
-    ) { prefsList, dbTriple, draft, aiState, toastSplash ->
+    ) { prefsList, dbList, draft, aiState, toastSplash ->
         val profile = prefsList[0] as UserProfile
         val measures = prefsList[1] as BodyMeasurements
         val fee = prefsList[2] as GymFeeRecord
         val appearance = prefsList[3] as AppearanceMode
-        val (sessions, bw, custom) = dbTriple
+        @Suppress("UNCHECKED_CAST")
+        val sessions = dbList[0] as List<WorkoutSession>
+        @Suppress("UNCHECKED_CAST")
+        val bw = dbList[1] as List<BodyWeightEntry>
+        @Suppress("UNCHECKED_CAST")
+        val custom = dbList[2] as List<ExerciseDefinition>
+        @Suppress("UNCHECKED_CAST")
+        val bundled = dbList[3] as List<ExerciseDefinition>
+        val combinedExercises = (ExerciseCatalog.BUILT_IN_EXERCISES + bundled + custom)
+            .distinctBy { it.name.lowercase(Locale.US) }
         MainUiState(
             isLoaded = true,
             showLaunchSplash = toastSplash.second,
@@ -105,7 +132,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             sessions = sessions,
             bodyWeightLog = bw,
             customExercises = custom,
-            allExercises = ExerciseCatalog.BUILT_IN_EXERCISES + custom,
+            allExercises = combinedExercises,
             activeDraft = draft,
             aiLookupState = aiState,
             toastBanner = toastSplash.first
@@ -383,10 +410,10 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun addExerciseToDraft(exerciseName: String, explicitEquipment: String? = null) {
         val st = uiState.value
+        val def = ExerciseCatalog.findByName(exerciseName, st.allExercises)
         val current = _activeDraft.value ?: ActiveDraft(
             dateIso = WorkoutMath.todayIso(),
-            groups = ExerciseCatalog.findByName(exerciseName, st.customExercises)?.groups?.take(1)
-                ?: listOf("Push")
+            groups = def?.groups?.take(1) ?: listOf("Push")
         ).also {
             _activeDraft.value = it
             startTimerIfNeeded()
@@ -397,7 +424,6 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             return
         }
 
-        val def = ExerciseCatalog.findByName(exerciseName, st.customExercises)
         val equipment = explicitEquipment ?: def?.equipment ?: "Machine"
         val isCardio = ExerciseCatalog.isCardioExercise(exerciseName, st.allExercises)
         val isBodyweight = !isCardio && def?.isBodyweight == true
@@ -424,13 +450,14 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
                 )
             )
         } else {
-            listOf(
+            val defaultWeight = if (isBodyweight) "0" else "20"
+            listOf("15", "12", "10").map { reps ->
                 DraftSet(
-                    repsText = if (isBodyweight) "12" else "10",
-                    weightText = if (isBodyweight) "0" else "20",
+                    repsText = reps,
+                    weightText = defaultWeight,
                     isCompleted = false
                 )
-            )
+            }
         }
 
         val newExercise = DraftExercise(
@@ -463,7 +490,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun addAiSuggestionToDraft(suggestion: AiExerciseSuggestion) {
         val st = uiState.value
-        val existing = ExerciseCatalog.findByName(suggestion.exerciseName, st.customExercises)
+        val existing = ExerciseCatalog.findByName(suggestion.exerciseName, st.allExercises)
         if (existing != null) {
             addExerciseToDraft(existing.name, existing.equipment)
         } else {
@@ -482,13 +509,20 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun addSetToExercise(localId: String) {
+        val allEx = uiState.value.allExercises
         _activeDraft.update { d ->
             d?.copy(
                 exercises = d.exercises.map { ex ->
                     if (ex.localId != localId) ex
                     else {
+                        val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allEx)
                         val template = ex.sets.lastOrNull() ?: DraftSet("10", "20", false)
-                        ex.copy(sets = ex.sets + template.copy(isCompleted = false))
+                        val nextReps = if (isCardio) {
+                            template.repsText
+                        } else {
+                            nextPyramidReps(ex.sets) ?: template.repsText
+                        }
+                        ex.copy(sets = ex.sets + template.copy(repsText = nextReps, isCompleted = false))
                     }
                 }
             )
@@ -688,17 +722,30 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             }
             .toMutableList()
 
-        if (ranked.size < 6) {
+        if (ranked.size < 12) {
             for (def in st.allExercises) {
                 if (groups.isEmpty() || def.groups.any { g -> groups.any { it.equals(g, ignoreCase = true) } }) {
                     if (ranked.none { it.first.name == def.name }) {
                         ranked.add(def to 0)
                     }
                 }
-                if (ranked.size >= 8) break
+                if (ranked.size >= 12) break
             }
         }
         return ranked
+    }
+
+    companion object {
+        internal fun nextPyramidReps(existingSets: List<DraftSet>): String? {
+            val reps = existingSets.map { it.repsText.trim() }
+            return when {
+                reps == listOf("15") -> "12"
+                reps == listOf("15", "12") -> "10"
+                reps == listOf("15", "12", "10") -> "8"
+                reps.size == 3 && reps.last() == "10" && reps[1] == "12" -> "8"
+                else -> null
+            }
+        }
     }
 
     fun suggestedNextSplit(): Pair<SplitPreset, Long?> {

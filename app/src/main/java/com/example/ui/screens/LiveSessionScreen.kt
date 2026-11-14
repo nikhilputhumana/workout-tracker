@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -104,6 +105,8 @@ fun LiveSessionScreen(
     val palette = LocalWorkoutPalette.current
     val isEditing = draft.editingSessionIds.isNotEmpty()
     var quickSearch by remember { mutableStateOf("") }
+    var showDiscardDialog by remember { mutableStateOf(false) }
+    var showFinishDialog by remember { mutableStateOf(false) }
 
     val totalVol = WorkoutMath.draftVolume(draft, allExercises)
     val totalSets = WorkoutMath.draftSetCount(draft)
@@ -297,7 +300,30 @@ fun LiveSessionScreen(
                 }
             }
 
-            // Immediate Inline Search + Usual Exercises
+            // Logged Exercise Cards (kept at the top in added order: 1st, 2nd, 3rd...)
+            items(draft.exercises, key = { it.localId }) { exercise ->
+                val def = ExerciseCatalog.findByName(exercise.name, allExercises)
+                val last = lastSessionOf(exercise.name)
+                val prKg = personalRecordKg(exercise.name)
+
+                LiveExerciseCard(
+                    exercise = exercise,
+                    definition = def,
+                    allExercises = allExercises,
+                    lastSession = last,
+                    historicalPrKg = prKg,
+                    onRemove = { onRemoveExercise(exercise.localId) },
+                    onAddSet = { onAddSet(exercise.localId) },
+                    onRemoveLastSet = { onRemoveLastSet(exercise.localId) },
+                    onUpdateReps = { idx, valStr -> onUpdateReps(exercise.localId, idx, valStr) },
+                    onUpdateWeight = { idx, valStr -> onUpdateWeight(exercise.localId, idx, valStr) },
+                    onToggleDone = { idx -> onToggleSetDone(exercise.localId, idx) },
+                    onSelectRpe = { rpe -> onSelectRpe(exercise.localId, rpe) },
+                    onUpdateNote = { note -> onUpdateExerciseNote(exercise.localId, note) }
+                )
+            }
+
+            // Inline Search + Usual Suggestions (stays below added exercises)
             item {
                 BorderedCard {
                     Column(
@@ -398,29 +424,6 @@ fun LiveSessionScreen(
                 }
             }
 
-            // Logged Exercise Cards
-            items(draft.exercises, key = { it.localId }) { exercise ->
-                val def = ExerciseCatalog.findByName(exercise.name, allExercises)
-                val last = lastSessionOf(exercise.name)
-                val prKg = personalRecordKg(exercise.name)
-
-                LiveExerciseCard(
-                    exercise = exercise,
-                    definition = def,
-                    allExercises = allExercises,
-                    lastSession = last,
-                    historicalPrKg = prKg,
-                    onRemove = { onRemoveExercise(exercise.localId) },
-                    onAddSet = { onAddSet(exercise.localId) },
-                    onRemoveLastSet = { onRemoveLastSet(exercise.localId) },
-                    onUpdateReps = { idx, valStr -> onUpdateReps(exercise.localId, idx, valStr) },
-                    onUpdateWeight = { idx, valStr -> onUpdateWeight(exercise.localId, idx, valStr) },
-                    onToggleDone = { idx -> onToggleSetDone(exercise.localId, idx) },
-                    onSelectRpe = { rpe -> onSelectRpe(exercise.localId, rpe) },
-                    onUpdateNote = { note -> onUpdateExerciseNote(exercise.localId, note) }
-                )
-            }
-
             // Add Exercise Picker Button (custom / AI / full filter)
             item {
                 Surface(
@@ -517,7 +520,7 @@ fun LiveSessionScreen(
                     )
                 }
                 TextButton(
-                    onClick = onDiscard,
+                    onClick = { showDiscardDialog = true },
                     modifier = Modifier
                         .heightIn(min = 48.dp)
                         .testTag("session_discard_button")
@@ -525,7 +528,7 @@ fun LiveSessionScreen(
                     Text(if (isEditing) "Cancel" else "Discard", color = palette.faint)
                 }
                 Button(
-                    onClick = onFinish,
+                    onClick = { showFinishDialog = true },
                     enabled = draft.exercises.isNotEmpty(),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -546,6 +549,79 @@ fun LiveSessionScreen(
             }
         }
     }
+
+    if (showDiscardDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscardDialog = false },
+            title = { Text(if (isEditing) "Discard changes?" else "Discard workout?") },
+            text = {
+                Text(
+                    if (isEditing) {
+                        "Unsaved edits to this workout will be lost."
+                    } else {
+                        "This will discard the active workout and any sets you logged."
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDiscardDialog = false
+                        onDiscard()
+                    },
+                    modifier = Modifier.testTag("confirm_discard_button")
+                ) {
+                    Text(
+                        text = if (isEditing) "Discard changes" else "Discard",
+                        color = palette.redInk,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscardDialog = false }) {
+                    Text("Keep editing")
+                }
+            }
+        )
+    }
+
+    if (showFinishDialog) {
+        val volPart = if (totalVol > 0.0) " · ${WorkoutMath.formatVolume(totalVol)}" else ""
+        AlertDialog(
+            onDismissRequest = { showFinishDialog = false },
+            title = { Text(if (isEditing) "Save workout changes?" else "Finish workout?") },
+            text = {
+                Text(
+                    if (isEditing) {
+                        "Update this history workout (${draft.exercises.size} exercises · $totalSets sets$volPart)?"
+                    } else {
+                        "Save this workout to history (${draft.exercises.size} exercises · $totalSets sets$volPart)?"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showFinishDialog = false
+                        onFinish()
+                    },
+                    modifier = Modifier.testTag("confirm_finish_button")
+                ) {
+                    Text(
+                        text = if (isEditing) "Save changes" else "Finish & save",
+                        color = palette.brand,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFinishDialog = false }) {
+                    Text("Keep logging")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -556,11 +632,6 @@ private fun QuickAddExerciseRow(
     onAdd: () -> Unit
 ) {
     val palette = LocalWorkoutPalette.current
-    val meta = if (last != null) {
-        "${def.equipment} · ${WorkoutMath.formatAgo(last.first)} · ${WorkoutMath.formatSetSummary(last.second, allExercises)}"
-    } else {
-        "${def.equipment} · ${def.groups.take(2).joinToString(", ")}"
-    }
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = palette.appBg,
@@ -582,22 +653,37 @@ private fun QuickAddExerciseRow(
                 height = 44.dp,
                 containerColor = palette.surface
             )
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
                 Text(
                     text = def.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = palette.text,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = meta,
-                    fontSize = 12.sp,
-                    color = palette.muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (last != null) {
+                    Text(
+                        text = WorkoutMath.formatSetSummary(last.second, allExercises),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.text2
+                    )
+                    Text(
+                        text = "${def.equipment} · ${WorkoutMath.formatAgo(last.first)}",
+                        fontSize = 12.sp,
+                        color = palette.muted
+                    )
+                } else {
+                    Text(
+                        text = "${def.equipment} · ${def.groups.take(2).joinToString(", ")}",
+                        fontSize = 12.sp,
+                        color = palette.muted
+                    )
+                }
             }
             Icon(
                 imageVector = Icons.Filled.Add,
@@ -703,9 +789,9 @@ private fun LiveExerciseCard(
                     Spacer(Modifier.height(5.dp))
                     Text(
                         text = if (lastSession != null) {
-                            "Last time · ${WorkoutMath.formatShort(lastSession.first)} · ${WorkoutMath.formatSetSummary(lastSession.second, allExercises)}"
+                            "Last: ${WorkoutMath.formatSetSummary(lastSession.second, allExercises)} (${WorkoutMath.formatAgo(lastSession.first)})"
                         } else {
-                            "First time logging this"
+                            "First time logging · ${if (isCardio) "enter time & distance" else "starts with 15-12-10 pyramid"}"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.muted

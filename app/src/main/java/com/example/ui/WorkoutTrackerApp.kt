@@ -31,14 +31,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ListAlt
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.FitnessCenter
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
@@ -47,6 +48,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FitnessCenter
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Settings
@@ -141,7 +143,7 @@ private data class BottomNavTab(
 
 private val MAIN_TABS = listOf(
     BottomNavTab(Routes.HOME, "Home", Icons.Filled.Home, Icons.Outlined.Home),
-    BottomNavTab(Routes.HISTORY, "History", Icons.AutoMirrored.Outlined.ListAlt, Icons.AutoMirrored.Outlined.ListAlt),
+    BottomNavTab(Routes.HISTORY, "History", Icons.Filled.History, Icons.Outlined.History),
     BottomNavTab(Routes.LIBRARY, "Exercises", Icons.Filled.FitnessCenter, Icons.Outlined.FitnessCenter),
     BottomNavTab(Routes.STATS, "Stats", Icons.Filled.BarChart, Icons.Outlined.BarChart),
     BottomNavTab(Routes.FOOD, "Food", Icons.Filled.Restaurant, Icons.Outlined.Restaurant),
@@ -259,9 +261,36 @@ fun WorkoutTrackerApp(
                     val backEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = backEntry?.destination?.route ?: Routes.HOME
                     var historyExpandId by remember { mutableStateOf<Long?>(null) }
+                    var lastWorkoutRoute by remember { mutableStateOf<String?>(null) }
+                    var pausedToActualHome by remember { mutableStateOf(false) }
 
                     val topLevelRoutes = remember { MAIN_TABS.map { it.route }.toSet() }
                     val isTopLevel = currentRoute in topLevelRoutes
+                    val isWorkoutFlowRoute = currentRoute == Routes.NEW_WORKOUT ||
+                        currentRoute == Routes.LIVE_SESSION ||
+                        currentRoute.startsWith("exercise_picker") ||
+                        currentRoute == Routes.PREVIOUS_WORKOUTS
+                    val showNavBar = currentRoute != Routes.EDIT_PROFILE
+
+                    LaunchedEffect(currentRoute, backEntry) {
+                        if (isWorkoutFlowRoute) {
+                            lastWorkoutRoute = when {
+                                currentRoute.startsWith("exercise_picker") -> {
+                                    val tab = backEntry?.arguments?.getInt("tab") ?: 0
+                                    Routes.picker(tab)
+                                }
+                                else -> currentRoute
+                            }
+                            pausedToActualHome = false
+                        }
+                    }
+
+                    LaunchedEffect(uiState.activeDraft) {
+                        if (uiState.activeDraft == null && !isWorkoutFlowRoute) {
+                            lastWorkoutRoute = null
+                            pausedToActualHome = false
+                        }
+                    }
 
                     val (headerTitle, headerSubtitle) = when {
                         currentRoute == Routes.HOME ->
@@ -306,12 +335,53 @@ fun WorkoutTrackerApp(
 
                     fun navigateTopTab(route: String) {
                         if (route != Routes.HISTORY) historyExpandId = null
-                        navController.navigate(route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                        if (route == Routes.HOME) {
+                            when {
+                                isWorkoutFlowRoute -> {
+                                    // 2nd Home tap (already creating/documenting a workout) -> go to actual Home page
+                                    if (uiState.activeDraft == null) {
+                                        lastWorkoutRoute = null
+                                    }
+                                    pausedToActualHome = true
+                                    navController.navigate(Routes.HOME) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            inclusive = false
+                                        }
+                                        launchSingleTop = true
+                                    }
+                                }
+                                currentRoute != Routes.HOME -> {
+                                    // 1st Home tap from another tab -> resume active workout screen if any
+                                    val resumeTarget = if (!pausedToActualHome) {
+                                        lastWorkoutRoute ?: if (uiState.activeDraft != null) Routes.LIVE_SESSION else null
+                                    } else {
+                                        null
+                                    }
+                                    if (resumeTarget != null) {
+                                        navController.navigate(resumeTarget) {
+                                            launchSingleTop = true
+                                        }
+                                    } else {
+                                        pausedToActualHome = false
+                                        navController.navigate(Routes.HOME) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    }
+                                }
+                                else -> Unit
                             }
-                            launchSingleTop = true
-                            restoreState = true
+                        } else {
+                            navController.navigate(route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
                     }
 
@@ -416,22 +486,36 @@ fun WorkoutTrackerApp(
                                 }
                             },
                             bottomBar = {
-                                if (isTopLevel && !useRail) {
+                                if (showNavBar && !useRail) {
                                     NavigationBar(
                                         containerColor = palette.surface,
                                         tonalElevation = 0.dp
                                     ) {
                                         MAIN_TABS.forEach { tab ->
-                                            val selected = currentRoute == tab.route
+                                            val selected = currentRoute == tab.route ||
+                                                (tab.route == Routes.HOME && isWorkoutFlowRoute)
+                                            val showActiveDot = tab.route == Routes.HOME &&
+                                                (uiState.activeDraft != null || lastWorkoutRoute != null)
                                             NavigationBarItem(
                                                 selected = selected,
                                                 onClick = { navigateTopTab(tab.route) },
                                                 icon = {
-                                                    Icon(
-                                                        imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                                        contentDescription = tab.label,
-                                                        modifier = Modifier.size(21.dp)
-                                                    )
+                                                    Box {
+                                                        Icon(
+                                                            imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                                            contentDescription = tab.label,
+                                                            modifier = Modifier.size(21.dp)
+                                                        )
+                                                        if (showActiveDot) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .align(Alignment.TopEnd)
+                                                                    .size(7.dp)
+                                                                    .clip(CircleShape)
+                                                                    .background(palette.greenMid)
+                                                            )
+                                                        }
+                                                    }
                                                 },
                                                 label = {
                                                     Text(
@@ -462,21 +546,35 @@ fun WorkoutTrackerApp(
                                     .padding(innerPadding)
                             ) {
                                 Row(modifier = Modifier.fillMaxSize()) {
-                                    if (isTopLevel && useRail) {
+                                    if (showNavBar && useRail) {
                                         NavigationRail(
                                             containerColor = palette.surface
                                         ) {
                                             Spacer(Modifier.height(8.dp))
                                             MAIN_TABS.forEach { tab ->
-                                                val selected = currentRoute == tab.route
+                                                val selected = currentRoute == tab.route ||
+                                                    (tab.route == Routes.HOME && isWorkoutFlowRoute)
+                                                val showActiveDot = tab.route == Routes.HOME &&
+                                                    (uiState.activeDraft != null || lastWorkoutRoute != null)
                                                 NavigationRailItem(
                                                     selected = selected,
                                                     onClick = { navigateTopTab(tab.route) },
                                                     icon = {
-                                                        Icon(
-                                                            imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
-                                                            contentDescription = tab.label
-                                                        )
+                                                        Box {
+                                                            Icon(
+                                                                imageVector = if (selected) tab.selectedIcon else tab.unselectedIcon,
+                                                                contentDescription = tab.label
+                                                            )
+                                                            if (showActiveDot) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .align(Alignment.TopEnd)
+                                                                        .size(7.dp)
+                                                                        .clip(CircleShape)
+                                                                        .background(palette.greenMid)
+                                                                )
+                                                            }
+                                                        }
                                                     },
                                                     label = { Text(tab.label, fontSize = 12.sp) },
                                                     colors = NavigationRailItemDefaults.colors(
@@ -509,11 +607,35 @@ fun WorkoutTrackerApp(
                                                 HomeScreen(
                                                     uiState = uiState,
                                                     suggestedSplit = viewModel.suggestedNextSplit(),
-                                                    onCreateWorkout = { navController.navigate(Routes.NEW_WORKOUT) },
-                                                    onResumeDraft = { navController.navigate(Routes.LIVE_SESSION) },
+                                                    onCreateWorkout = {
+                                                        if (uiState.activeDraft != null) {
+                                                            viewModel.showToast(
+                                                                "Finish or discard your workout in progress first",
+                                                                ToastTone.WARNING
+                                                            )
+                                                        } else {
+                                                            pausedToActualHome = false
+                                                            navController.navigate(Routes.NEW_WORKOUT)
+                                                        }
+                                                    },
+                                                    onResumeDraft = {
+                                                        pausedToActualHome = false
+                                                        val target = lastWorkoutRoute ?: Routes.LIVE_SESSION
+                                                        navController.navigate(target) {
+                                                            launchSingleTop = true
+                                                        }
+                                                    },
                                                     onStartSuggestedSplit = { preset ->
-                                                        viewModel.startNewDraft(WorkoutMath.todayIso(), preset.groups)
-                                                        navController.navigate(Routes.LIVE_SESSION)
+                                                        if (uiState.activeDraft != null) {
+                                                            viewModel.showToast(
+                                                                "Finish or discard your workout in progress first",
+                                                                ToastTone.WARNING
+                                                            )
+                                                        } else {
+                                                            pausedToActualHome = false
+                                                            viewModel.startNewDraft(WorkoutMath.todayIso(), preset.groups)
+                                                            navController.navigate(Routes.LIVE_SESSION)
+                                                        }
                                                     },
                                                     onOpenStats = { navigateTopTab(Routes.STATS) },
                                                     onOpenFees = { navigateTopTab(Routes.SETTINGS) },
@@ -571,12 +693,16 @@ fun WorkoutTrackerApp(
                                                         onUpdateManualDuration = { viewModel.updateDraftManualDuration(it) },
                                                         onDiscard = {
                                                             val wasEditing = draft.editingSessionIds.isNotEmpty()
+                                                            lastWorkoutRoute = null
+                                                            pausedToActualHome = false
                                                             viewModel.discardDraft()
                                                             if (wasEditing) navController.popBackStack()
                                                             else navController.popBackStack(Routes.HOME, inclusive = false)
                                                         },
                                                         onFinish = {
                                                             viewModel.finishDraft { wasEditing ->
+                                                                lastWorkoutRoute = null
+                                                                pausedToActualHome = false
                                                                 if (wasEditing) {
                                                                     navController.popBackStack()
                                                                 } else {
@@ -650,6 +776,7 @@ fun WorkoutTrackerApp(
                                                         navController.navigate(Routes.detail(name))
                                                     },
                                                     onEditSession = { session, sourceIds ->
+                                                        pausedToActualHome = false
                                                         viewModel.startEditingSession(session, sourceIds)
                                                         navController.navigate(Routes.LIVE_SESSION)
                                                     },

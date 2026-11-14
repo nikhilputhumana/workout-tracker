@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -34,6 +37,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.ExerciseCatalog
 import com.example.domain.ExerciseDefinition
+import com.example.domain.LoggedExercise
+import com.example.domain.RpeRating
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
 import com.example.ui.theme.LocalWorkoutPalette
@@ -238,7 +243,7 @@ fun SessionSummaryCard(
                 text = session.exercises.joinToString(" · ") { it.name },
                 style = MaterialTheme.typography.bodySmall,
                 color = palette.muted,
-                maxLines = 1,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -272,6 +277,157 @@ fun SessionSummaryCard(
                         text = "~$kcal kcal",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
+                        color = palette.text2
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun WorkoutExerciseCardBlock(
+    exercise: LoggedExercise,
+    allExercises: List<ExerciseDefinition>,
+    modifier: Modifier = Modifier,
+    showSetPills: Boolean = true,
+    onClick: (() -> Unit)? = null,
+    trailingHeaderAction: (@Composable () -> Unit)? = null
+) {
+    val palette = LocalWorkoutPalette.current
+    val def = ExerciseCatalog.findByName(exercise.name, allExercises)
+    val isCardio = ExerciseCatalog.isCardioExercise(exercise.name, allExercises)
+    val exVol = WorkoutMath.exerciseVolume(exercise, allExercises)
+    val pills = WorkoutMath.formatSetPills(exercise, allExercises)
+
+    val (rpeBg, rpeFg, rpeLabel) = when (exercise.rpe) {
+        RpeRating.EASY -> Triple(palette.greenSoft, palette.greenInk, "Easy")
+        RpeRating.RIGHT -> Triple(palette.brandSoft, palette.brandInk, "Just right")
+        RpeRating.HARD -> Triple(palette.redSoft, palette.redInk, "Hard")
+        null -> Triple(Color.Transparent, palette.faint, "")
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        MuscleFigureBox(
+            regions = def?.regions ?: listOf("chest"),
+            width = 36.dp,
+            height = 48.dp
+        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            // 1. Name of Workout (always full-width & readable)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = exercise.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = palette.text,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        StatusBadge(
+                            label = exercise.equipment,
+                            bg = palette.subtle,
+                            fg = palette.text2
+                        )
+                        if (rpeLabel.isNotEmpty()) {
+                            StatusBadge(label = rpeLabel, bg = rpeBg, fg = rpeFg)
+                        }
+                    }
+                }
+                if (trailingHeaderAction != null) {
+                    trailingHeaderAction()
+                }
+            }
+
+            // 2. Weight & Sets (aligned vertically below Name)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = WorkoutMath.formatSetSummary(exercise, allExercises),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFeatureSettings = "tnum"
+                    ),
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.text
+                )
+                if (showSetPills && pills.size > 1) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        pills.forEach { pill ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(palette.appBg)
+                                    .border(1.dp, palette.border, RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = pill,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = palette.text2
+                                )
+                            }
+                        }
+                    }
+                }
+                if (!isCardio && exVol > 0.0) {
+                    Text(
+                        text = "Total lifted: ${WorkoutMath.formatVolume(exVol)}",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.muted
+                    )
+                }
+            }
+
+            // 3. Notes (aligned vertically below Weight)
+            if (exercise.note.isNotBlank()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(palette.appBg)
+                        .border(1.dp, palette.border, RoundedCornerShape(6.dp))
+                        .padding(horizontal = 10.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.Notes,
+                        contentDescription = "Exercise notes",
+                        tint = palette.faint,
+                        modifier = Modifier
+                            .padding(top = 1.dp)
+                            .size(14.dp)
+                    )
+                    Text(
+                        text = exercise.note,
+                        style = MaterialTheme.typography.bodySmall,
                         color = palette.text2
                     )
                 }

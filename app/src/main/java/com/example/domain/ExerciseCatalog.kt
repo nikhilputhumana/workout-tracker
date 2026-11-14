@@ -1,5 +1,7 @@
 package com.example.domain
 
+import android.content.Context
+import org.json.JSONArray
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -15,7 +17,7 @@ object ExerciseCatalog {
     )
 
     val EQUIPMENT_OPTIONS = listOf(
-        "Bar", "Dumbbell", "Machine", "Cable", "Bodyweight"
+        "Bar", "Dumbbell", "Machine", "Cable", "Bodyweight", "Kettlebell", "Band"
     )
 
     val TRAINING_SPLITS = listOf(
@@ -138,12 +140,69 @@ object ExerciseCatalog {
         ex("Stair climber", "Cardio", "Machine", listOf("heart", "glutes"), "stepper climb stairs cardio", bw = false)
     )
 
+    fun loadAssetExercises(context: Context): List<ExerciseDefinition> {
+        return runCatching {
+            val raw = context.assets.open("free_exercise_db.json")
+                .bufferedReader()
+                .use { it.readText() }
+            val arr = JSONArray(raw)
+            buildList(arr.length()) {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    val name = obj.optString("name").trim()
+                    if (name.isEmpty()) continue
+                    val groupsArr = obj.optJSONArray("groups")
+                    val groups = buildList {
+                        if (groupsArr != null) {
+                            for (j in 0 until groupsArr.length()) {
+                                val g = groupsArr.optString(j).trim()
+                                if (g.isNotEmpty()) add(g)
+                            }
+                        }
+                    }.ifEmpty { listOf("Push") }
+                    val regionsArr = obj.optJSONArray("regions")
+                    val regions = buildList {
+                        if (regionsArr != null) {
+                            for (j in 0 until regionsArr.length()) {
+                                val r = regionsArr.optString(j).trim()
+                                if (r.isNotEmpty()) add(r)
+                            }
+                        }
+                    }.ifEmpty { listOf("chest") }
+                    val instArr = obj.optJSONArray("instructions")
+                    val instructions = buildList {
+                        if (instArr != null) {
+                            for (j in 0 until instArr.length()) {
+                                val step = instArr.optString(j).trim()
+                                if (step.isNotEmpty()) add(step)
+                            }
+                        }
+                    }
+                    add(
+                        ExerciseDefinition(
+                            name = name,
+                            groups = groups,
+                            equipment = obj.optString("equipment", "Bodyweight").trim().ifEmpty { "Bodyweight" },
+                            regions = regions,
+                            keywords = obj.optString("keywords", "").trim(),
+                            isBodyweight = obj.optBoolean("bw", false),
+                            isCustom = false,
+                            category = obj.optString("cat", "strength").trim().ifEmpty { "strength" },
+                            instructions = instructions
+                        )
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
     fun findByName(name: String, custom: List<ExerciseDefinition> = emptyList()): ExerciseDefinition? {
-        return (BUILT_IN_EXERCISES + custom).firstOrNull { it.name.equals(name, ignoreCase = true) }
+        return BUILT_IN_EXERCISES.firstOrNull { it.name.equals(name, ignoreCase = true) }
+            ?: custom.firstOrNull { it.name.equals(name, ignoreCase = true) }
     }
 
     fun isCardioExercise(name: String, allExercises: List<ExerciseDefinition> = BUILT_IN_EXERCISES): Boolean {
-        val def = findByName(name, allExercises.filter { it.isCustom })
+        val def = findByName(name, allExercises)
         if (def != null) return def.groups.any { it.equals("Cardio", ignoreCase = true) }
         val lower = name.lowercase(Locale.US)
         return lower.contains("run") || lower.contains("walk") || lower.contains("jog") ||
@@ -158,18 +217,19 @@ object ExerciseCatalog {
         if (tokens.isEmpty()) return emptyList()
 
         val scored = allExercises.mapNotNull { def ->
+            val nameLower = def.name.lowercase(Locale.US)
             val haystack = (
-                def.name + " " + def.equipment + " " + def.keywords + " " +
+                nameLower + " " + def.equipment + " " + def.keywords + " " +
                     def.groups.joinToString(" ") + " " + def.regions.joinToString(" ")
                 ).lowercase(Locale.US)
             var score = 0
             for (t in tokens) {
                 if (haystack.contains(t)) {
-                    score += if (def.name.lowercase(Locale.US).contains(t)) 2 else 1
+                    score += if (nameLower.contains(t)) 3 else 1
                 }
             }
             if (score > 0) def to score else null
-        }.sortedByDescending { it.second }.take(5)
+        }.sortedByDescending { it.second }.take(6)
 
         return scored.mapIndexed { idx, (def, score) ->
             val label = when (idx) {
@@ -266,11 +326,9 @@ object WorkoutMath {
         val diff = daysBetween(dateIso, todayIso) ?: return dateIso
         return when {
             diff == 0L -> "today"
-            diff == 1L -> "yesterday"
-            diff < 0L -> "in ${-diff}d"
-            diff < 7L -> "$diff days ago"
-            diff < 14L -> "last week"
-            else -> "${diff / 7} weeks ago"
+            diff == 1L -> "1 day ago"
+            diff < 0L -> "in ${-diff} days"
+            else -> "$diff days ago"
         }
     }
 
@@ -427,6 +485,7 @@ object WorkoutMath {
         ex: LoggedExercise,
         allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
     ): String {
+        if (ex.sets.isEmpty()) return "No sets logged"
         val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allExercises)
         if (isCardio) {
             return ex.sets.joinToString(", ") { s ->
@@ -435,15 +494,43 @@ object WorkoutMath {
                 listOf(minsPart, distPart).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "logged" }
             }
         }
-        val grouped = linkedMapOf<Pair<Int, Double>, Int>()
-        for (s in ex.sets) {
-            val key = s.reps to s.weightKg
-            grouped[key] = (grouped[key] ?: 0) + 1
+        val allSameWeight = ex.sets.map { it.weightKg }.distinct().size == 1
+        val allSameReps = ex.sets.map { it.reps }.distinct().size == 1
+        val firstWeight = ex.sets.first().weightKg
+        val weightLabel = if (firstWeight > 0.0) "${formatKg(firstWeight)} kg" else "Bodyweight"
+        return when {
+            allSameWeight && allSameReps -> {
+                val count = ex.sets.size
+                val reps = ex.sets.first().reps
+                "$count ${if (count == 1) "set" else "sets"} × $reps reps · $weightLabel"
+            }
+            allSameWeight -> {
+                val repsList = ex.sets.joinToString(" / ") { "${it.reps}" }
+                "$repsList reps · $weightLabel"
+            }
+            else -> {
+                ex.sets.joinToString(" · ") { s ->
+                    val w = if (s.weightKg > 0.0) "${formatKg(s.weightKg)} kg" else "BW"
+                    "${s.reps} reps @ $w"
+                }
+            }
         }
-        return grouped.entries.joinToString(", ") { (key, count) ->
-            val (reps, kg) = key
-            val wLabel = if (kg > 0.0) " @ ${formatKg(kg)} kg" else " bw"
-            "${count}×$reps$wLabel"
+    }
+
+    fun formatSetPills(
+        ex: LoggedExercise,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): List<String> {
+        val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allExercises)
+        return ex.sets.mapIndexed { idx, s ->
+            if (isCardio) {
+                val minsPart = if (s.reps > 0) "${s.reps} min" else ""
+                val distPart = if (s.weightKg > 0.0) "${formatKg(s.weightKg)} km" else ""
+                listOf(minsPart, distPart).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "Logged" }
+            } else {
+                val wLabel = if (s.weightKg > 0.0) "${formatKg(s.weightKg)} kg" else "BW"
+                "Set ${idx + 1}: ${s.reps} reps · $wLabel"
+            }
         }
     }
 

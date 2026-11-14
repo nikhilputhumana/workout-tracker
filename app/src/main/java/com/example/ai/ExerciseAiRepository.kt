@@ -1,10 +1,13 @@
 package com.example.ai
 
+import android.content.Context
 import android.util.Log
 import com.example.domain.AiExerciseSuggestion
 import com.example.domain.ExerciseCatalog
 import com.example.domain.ExerciseDefinition
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
+import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
@@ -12,10 +15,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
+import java.util.Locale
 
 private const val TAG = "ExerciseAiRepo"
 
-class ExerciseAiRepository {
+class ExerciseAiRepository(private val context: Context) {
 
     private val responseSchema = Schema.obj(
         properties = mapOf(
@@ -23,12 +27,12 @@ class ExerciseAiRepository {
                 items = Schema.obj(
                     properties = mapOf(
                         "exerciseName" to Schema.string(description = "Standard gym exercise name"),
-                        "equipment" to Schema.string(description = "Primary equipment: Bar, Dumbbell, Machine, Cable, or Bodyweight"),
+                        "equipment" to Schema.string(description = "Primary equipment: Bar, Dumbbell, Machine, Cable, Kettlebell, Band, or Bodyweight"),
                         "muscleGroups" to Schema.array(
                             items = Schema.string(),
                             description = "Targeted muscle groups such as Chest, Back, Shoulders, Biceps, Triceps, Legs, Abs, Cardio"
                         ),
-                        "reason" to Schema.string(description = "Short 1-sentence reason why this exercise fits the user's description")
+                        "reason" to Schema.string(description = "Short 1-sentence reason under 15 words why this matches")
                     )
                 ),
                 description = "Top 1 to 3 matching gym exercises"
@@ -36,14 +40,54 @@ class ExerciseAiRepository {
         )
     )
 
-    private val model by lazy {
-        Firebase.ai.generativeModel(
-            modelName = "gemini-3.8-flash",
-            generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = this@ExerciseAiRepository.responseSchema
+    @Volatile
+    private var cachedModel: GenerativeModel? = null
+
+    private fun getOrCreateModel(): GenerativeModel? {
+        if (!ensureFirebaseInitialized(context)) {
+            return null
+        }
+        configureAppCheckIfNeeded()
+        return cachedModel ?: synchronized(this) {
+            cachedModel ?: Firebase.ai.generativeModel(
+                modelName = "gemini-3.8-flash",
+                generationConfig = generationConfig {
+                    responseMimeType = "application/json"
+                    responseSchema = this@ExerciseAiRepository.responseSchema
+                }
+            ).also { cachedModel = it }
+        }
+    }
+
+    private fun configureAppCheckIfNeeded() {
+        runCatching {
+            if (FirebaseApp.getApps(context).isNotEmpty()) {
+                configureAppCheck(context, null)
             }
-        )
+        }
+    }
+
+    private fun compactCatalogCandidates(
+        userDescription: String,
+        knownExercises: List<ExerciseDefinition>
+    ): String {
+        val tokens = userDescription.lowercase(Locale.US)
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length > 2 }
+        val scored = if (tokens.isEmpty()) {
+            ExerciseCatalog.BUILT_IN_EXERCISES.take(35)
+        } else {
+            val hits = knownExercises.mapNotNull { def ->
+                val hay = "${def.name} ${def.equipment} ${def.groups.joinToString(" ")} ${def.keywords}".lowercase(Locale.US)
+                var score = 0
+                for (t in tokens) {
+                    if (hay.contains(t)) score += if (def.name.lowercase(Locale.US).contains(t)) 3 else 1
+                }
+                if (score > 0) def to score else null
+            }.sortedByDescending { it.second }.map { it.first }.take(35)
+            (hits + ExerciseCatalog.BUILT_IN_EXERCISES).distinctBy { it.name.lowercase(Locale.US) }.take(45)
+        }
+        return scored.joinToString(", ") { "${it.name} (${it.equipment})" }
     }
 
     suspend fun identifyExercise(
@@ -55,20 +99,28 @@ class ExerciseAiRepository {
             return Result.failure(IllegalArgumentException("Describe the machine or movement first."))
         }
 
-        val catalogNames = knownExercises.joinToString(", ") { "${it.name} (${it.equipment})" }
+        val activeModel = getOrCreateModel()
+            ?: return Result.failure(
+                IllegalStateException(
+                    "Firebase is not configured in this APK (missing google-services.json). " +
+                        "Offline matches below still work."
+                )
+            )
+
+        val catalogNames = compactCatalogCandidates(trimmed, knownExercises)
         val prompt = """
-            You are a knowledgeable strength & conditioning coach helping a lifter identify a gym exercise they described.
-            Prefer matching exact names from this catalog whenever appropriate, or provide the standard gym name if it is not in the catalog:
-            Catalog: $catalogNames
+            Identify the gym exercise described by the lifter.
+            Use exact names from Candidates when relevant, or provide the standard gym name:
+            Candidates: $catalogNames
 
-            Lifter's description: "$trimmed"
+            Description: "$trimmed"
 
-            Return 1 to 3 best matching exercises ordered from closest match to alternative.
+            Return 1 to 3 best matches ordered closest first. Keep each reason brief.
         """.trimIndent()
 
         return try {
             val response = withTimeout(60_000L) {
-                model.generateContent(prompt)
+                activeModel.generateContent(prompt)
             }
             val jsonText = response.text ?: throw IllegalStateException("Empty AI response.")
             val root = JSONObject(jsonText)
@@ -88,7 +140,7 @@ class ExerciseAiRepository {
                             }
                         }
                     }.ifEmpty {
-                        ExerciseCatalog.findByName(name)?.groups ?: listOf("Push")
+                        ExerciseCatalog.findByName(name, knownExercises)?.groups ?: listOf("Push")
                     }
                     if (name.isNotEmpty()) {
                         add(

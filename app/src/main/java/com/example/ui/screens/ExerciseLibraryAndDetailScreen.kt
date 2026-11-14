@@ -203,13 +203,16 @@ fun ExerciseLibraryScreen(
                         width = 38.dp,
                         height = 50.dp
                     )
-                    Column(modifier = Modifier.weight(1f)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
                         Text(
                             text = def.name,
                             style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
+                            fontWeight = FontWeight.SemiBold,
                             color = palette.text,
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
@@ -217,18 +220,17 @@ fun ExerciseLibraryScreen(
                             fontSize = 12.sp,
                             color = palette.muted
                         )
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
+                        val statusText = if (last != null) {
+                            val prPart = if (primaryMetric != "—") "PR $primaryMetric · " else ""
+                            "${prPart}Last done ${WorkoutMath.formatAgo(last.first)}"
+                        } else {
+                            "Not logged yet"
+                        }
                         Text(
-                            text = primaryMetric,
-                            style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.text
-                        )
-                        Text(
-                            text = last?.let { WorkoutMath.formatAgo(it.first) } ?: "never",
+                            text = statusText,
                             fontSize = 12.sp,
-                            color = palette.faint
+                            fontWeight = if (last != null) FontWeight.Medium else FontWeight.Normal,
+                            color = if (last != null) palette.brandInk else palette.faint
                         )
                     }
                 }
@@ -331,11 +333,44 @@ fun ExerciseDetailScreen(
                             )
                             def.groups.take(2).forEach { MuscleGroupTag(it) }
                         }
-                        Text(
-                            text = def.keywords.replaceFirstChar { it.uppercase() } + ".",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = palette.muted
-                        )
+                        if (def.instructions.isEmpty() && def.keywords.isNotBlank()) {
+                            Text(
+                                text = def.keywords.replaceFirstChar { it.uppercase() } + ".",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.muted
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (def.instructions.isNotEmpty()) {
+            item {
+                BorderedCard {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SectionLabel("How to perform")
+                        def.instructions.forEachIndexed { idx, step ->
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.Top
+                            ) {
+                                Text(
+                                    text = "${idx + 1}.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = palette.brandInk
+                                )
+                                Text(
+                                    text = step,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.text2
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -460,47 +495,43 @@ fun ExerciseDetailScreen(
                                 null -> palette.faint
                             }
                             val vol = WorkoutMath.exerciseVolume(ex, allExercises)
-                            Row(
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 11.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Column(modifier = Modifier.width(80.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
-                                        text = WorkoutMath.formatDayMonth(dateIso),
+                                        text = "${WorkoutMath.formatDayMonth(dateIso)} · ${WorkoutMath.formatAgo(dateIso)}",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = palette.text
                                     )
                                     Text(
-                                        text = WorkoutMath.formatAgo(dateIso),
+                                        text = ex.rpe?.label ?: "—",
                                         fontSize = 12.sp,
-                                        color = palette.faint
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = rpeColor
                                     )
                                 }
                                 Text(
-                                    text = WorkoutMath.formatSetSummary(ex, allExercises),
+                                    text = WorkoutMath.formatSetSummary(ex, allExercises) +
+                                        if (vol > 0.0) " · ${WorkoutMath.formatVolume(vol)} total" else "",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontFeatureSettings = "tnum"
                                     ),
-                                    color = palette.text2,
-                                    modifier = Modifier.weight(1f)
+                                    color = palette.text2
                                 )
-                                Column(horizontalAlignment = Alignment.End) {
-                                    if (vol > 0.0) {
-                                        Text(
-                                            text = WorkoutMath.formatVolume(vol),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = palette.text
-                                        )
-                                    }
+                                if (ex.note.isNotBlank()) {
                                     Text(
-                                        text = ex.rpe?.label?.lowercase() ?: "—",
-                                        fontSize = 12.sp,
-                                        color = rpeColor
+                                        text = "Notes: ${ex.note}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = palette.muted
                                     )
                                 }
                             }

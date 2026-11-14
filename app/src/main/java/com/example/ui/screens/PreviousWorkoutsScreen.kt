@@ -32,15 +32,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.ExerciseCatalog
 import com.example.domain.ExerciseDefinition
-import com.example.domain.RpeRating
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
 import com.example.ui.components.BorderedCard
+import com.example.ui.components.WorkoutExerciseCardBlock
 import com.example.ui.theme.LocalWorkoutPalette
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -190,77 +189,34 @@ fun PreviousWorkoutsScreen(
                             val alreadyInDraft = draftExerciseNames.any {
                                 it.equals(ex.name, ignoreCase = true)
                             }
-                            val rpeColor = when (ex.rpe) {
-                                RpeRating.EASY -> palette.greenInk
-                                RpeRating.HARD -> palette.redInk
-                                RpeRating.RIGHT -> palette.brandInk
-                                null -> palette.faint
-                            }
-                            val rpeText = when (ex.rpe) {
-                                RpeRating.EASY -> "Felt easy"
-                                RpeRating.HARD -> "Felt hard"
-                                RpeRating.RIGHT -> "Just right"
-                                null -> "—"
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = ex.name,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = palette.text,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = ex.equipment,
-                                        fontSize = 12.sp,
-                                        color = palette.faint
-                                    )
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = WorkoutMath.formatSetSummary(ex, allExercises),
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFeatureSettings = "tnum"
-                                        ),
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = palette.text
-                                    )
-                                    Text(
-                                        text = rpeText,
-                                        fontSize = 12.sp,
-                                        color = rpeColor
-                                    )
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(4.dp),
-                                    color = palette.subtle,
-                                    modifier = Modifier
-                                        .heightIn(min = 38.dp)
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .clickable { onAddExerciseToDraft(ex.name) }
-                                        .testTag("prev_add_${ex.name.lowercase().replace(' ', '_')}")
-                                ) {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier.padding(horizontal = 10.dp)
+                            WorkoutExerciseCardBlock(
+                                exercise = ex,
+                                allExercises = allExercises,
+                                showSetPills = true,
+                                trailingHeaderAction = {
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = palette.subtle,
+                                        modifier = Modifier
+                                            .heightIn(min = 38.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable { onAddExerciseToDraft(ex.name) }
+                                            .testTag("prev_add_${ex.name.lowercase().replace(' ', '_')}")
                                     ) {
-                                        Text(
-                                            text = if (alreadyInDraft) "Added" else "Add",
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = if (alreadyInDraft) palette.faint else palette.brandInk
-                                        )
+                                        Box(
+                                            contentAlignment = Alignment.Center,
+                                            modifier = Modifier.padding(horizontal = 12.dp)
+                                        ) {
+                                            Text(
+                                                text = if (alreadyInDraft) "Added" else "Add",
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = if (alreadyInDraft) palette.faint else palette.brandInk
+                                            )
+                                        }
                                     }
                                 }
-                            }
+                            )
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()

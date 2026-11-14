@@ -102,7 +102,7 @@ fun ExercisePickerScreen(
     val tabs = listOf("Exercises", "Describe it")
     val filterOptions = listOf(
         "All", "Chest", "Back", "Shoulders", "Legs", "Abs", "Cardio",
-        "Dumbbell", "Machine", "Bar", "Cable", "Bodyweight"
+        "Dumbbell", "Machine", "Bar", "Cable", "Bodyweight", "Kettlebell", "Band"
     )
     val describeExamples = listOf(
         "pull a wide bar down while seated",
@@ -609,27 +609,36 @@ private fun PickerExerciseRow(
                 modifier = Modifier
                     .weight(1f)
                     .clickable(onClick = onOpenDetail)
-                    .padding(vertical = 2.dp)
+                    .padding(vertical = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Text(
                     text = def.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = palette.text,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = if (last != null) {
-                        "${def.equipment} · ${WorkoutMath.formatAgo(last.first)} · ${WorkoutMath.formatSetSummary(last.second, allExercises)}"
-                    } else {
-                        "${def.equipment} · not logged yet"
-                    },
-                    fontSize = 12.sp,
-                    color = palette.muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (last != null) {
+                    Text(
+                        text = WorkoutMath.formatSetSummary(last.second, allExercises),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.text2
+                    )
+                    Text(
+                        text = "${def.equipment} · ${WorkoutMath.formatAgo(last.first)}",
+                        fontSize = 12.sp,
+                        color = palette.muted
+                    )
+                } else {
+                    Text(
+                        text = "${def.equipment} · ${def.groups.take(2).joinToString(", ")}",
+                        fontSize = 12.sp,
+                        color = palette.muted
+                    )
+                }
                 if (!why.isNullOrBlank()) {
                     Text(
                         text = why,

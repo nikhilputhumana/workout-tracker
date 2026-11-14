@@ -15,10 +15,20 @@ private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store
 private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
 private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
+fun ensureFirebaseInitialized(context: Context): Boolean {
+    if (FirebaseApp.getApps(context).isNotEmpty()) return true
+    val appIdRes = context.resources.getIdentifier("google_app_id", "string", context.packageName)
+    if (appIdRes == 0) {
+        Log.e(TAG, "google_app_id string resource not found; google-services.json may be missing.")
+        return false
+    }
+    return FirebaseApp.initializeApp(context) != null || FirebaseApp.getApps(context).isNotEmpty()
+}
+
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
-        if (FirebaseApp.getApps(context).isEmpty()) {
-            FirebaseApp.initializeApp(context)
+        if (!ensureFirebaseInitialized(context)) {
+            return
         }
 
         if (BuildConfig.DEBUG) {

@@ -51,13 +51,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.ExerciseCatalog
 import com.example.domain.ExerciseDefinition
-import com.example.domain.RpeRating
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
 import com.example.ui.components.BorderedCard
-import com.example.ui.components.MuscleFigureBox
 import com.example.ui.components.MuscleGroupTag
 import com.example.ui.components.StatusBadge
+import com.example.ui.components.WorkoutExerciseCardBlock
 import com.example.ui.components.countSessionPrs
 import com.example.ui.theme.LocalWorkoutPalette
 
@@ -306,61 +305,12 @@ fun HistoryScreen(
                             )
 
                             session.exercises.forEach { ex ->
-                                val def = ExerciseCatalog.findByName(ex.name, allExercises)
-                                val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allExercises)
-                                val exVol = WorkoutMath.exerciseVolume(ex, allExercises)
-                                val rpeLabel = when (ex.rpe) {
-                                    RpeRating.EASY -> "easy"
-                                    RpeRating.RIGHT -> "just right"
-                                    RpeRating.HARD -> "hard"
-                                    null -> "not rated"
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { onOpenExerciseDetail(ex.name) }
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    MuscleFigureBox(
-                                        regions = def?.regions ?: listOf("chest"),
-                                        width = 32.dp,
-                                        height = 42.dp
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = ex.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium,
-                                            color = palette.text,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Text(
-                                            text = "${ex.equipment} · $rpeLabel",
-                                            fontSize = 12.sp,
-                                            color = palette.faint
-                                        )
-                                    }
-                                    Column(horizontalAlignment = Alignment.End) {
-                                        Text(
-                                            text = WorkoutMath.formatSetSummary(ex, allExercises),
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontFeatureSettings = "tnum"
-                                            ),
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = palette.text
-                                        )
-                                        if (!isCardio && exVol > 0.0) {
-                                            Text(
-                                                text = WorkoutMath.formatVolume(exVol),
-                                                fontSize = 12.sp,
-                                                color = palette.faint
-                                            )
-                                        }
-                                    }
-                                }
+                                WorkoutExerciseCardBlock(
+                                    exercise = ex,
+                                    allExercises = allExercises,
+                                    showSetPills = true,
+                                    onClick = { onOpenExerciseDetail(ex.name) }
+                                )
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
