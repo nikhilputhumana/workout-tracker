@@ -1,0 +1,156 @@
+package com.example.ui.theme
+
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
+
+@Immutable
+data class GroupColorPair(val bg: Color, val fg: Color)
+
+@Immutable
+data class WorkoutPalette(
+    val isDark: Boolean,
+    val appBg: Color,
+    val surface: Color,
+    val subtle: Color,
+    val border: Color,
+    val borderStrong: Color,
+    val text: Color,
+    val text2: Color,
+    val muted: Color,
+    val faint: Color,
+    val onBrand: Color,
+    val brand: Color,
+    val brandHover: Color,
+    val brandSoft: Color,
+    val brandBd: Color,
+    val brandInk: Color,
+    val green: Color,
+    val greenSoft: Color,
+    val greenInk: Color,
+    val greenMid: Color,
+    val greenBd: Color,
+    val greenTint: Color,
+    val orange: Color,
+    val orangeSoft: Color,
+    val orangeInk: Color,
+    val redSoft: Color,
+    val redInk: Color,
+    val tealSoft: Color,
+    val tealBd: Color,
+    val teal: Color,
+    val figBase: Color,
+    val figHighlight: Color,
+    val chartTrack: Color,
+    val chartArea: Color,
+    val toastBg: Color,
+    val toastFg: Color,
+    val groupColors: Map<String, GroupColorPair>
+) {
+    fun groupColor(group: String): GroupColorPair =
+        groupColors[group] ?: GroupColorPair(subtle, text2)
+}
+
+val LightWorkoutPalette = WorkoutPalette(
+    isDark = false,
+    appBg = Color(0xFFF8F9F9),
+    surface = Color(0xFFFFFFFF),
+    subtle = Color(0xFFF4F5F5),
+    border = Color(0xFFEEEFEF),
+    borderStrong = Color(0xFFD0D4DF),
+    text = Color(0xFF00164E),
+    text2 = Color(0xFF4B5366),
+    muted = Color(0xFF6B7693),
+    faint = Color(0xFF8892AC),
+    onBrand = Color(0xFFFFFFFF),
+    brand = Color(0xFF1F5EFF),
+    brandHover = Color(0xFF194FD7),
+    brandSoft = Color(0xFFECF2FF),
+    brandBd = Color(0xFFA5BAFE),
+    brandInk = Color(0xFF1543B5),
+    green = Color(0xFF158A28),
+    greenSoft = Color(0xFFE3F1E6),
+    greenInk = Color(0xFF0C6B1A),
+    greenMid = Color(0xFF49A55B),
+    greenBd = Color(0xFFBADDC1),
+    greenTint = Color(0xFFF7FBF7),
+    orange = Color(0xFFFCAC27),
+    orangeSoft = Color(0xFFFEEBCC),
+    orangeInk = Color(0xFF7F5209),
+    redSoft = Color(0xFFFEE9E8),
+    redInk = Color(0xFFB71327),
+    tealSoft = Color(0xFFF4FBFF),
+    tealBd = Color(0xFFA0DCFF),
+    teal = Color(0xFF407DA5),
+    figBase = Color(0xFFDFE3EA),
+    figHighlight = Color(0xFF1F5EFF),
+    chartTrack = Color(0xFFA5BAFE),
+    chartArea = Color(0xFFECF2FF),
+    toastBg = Color(0xFF00164E),
+    toastFg = Color(0xFFFFFFFF),
+    groupColors = mapOf(
+        "Push" to GroupColorPair(Color(0xFFECF2FF), Color(0xFF1543B5)),
+        "Pull" to GroupColorPair(Color(0xFFDBCFF4), Color(0xFF461D97)),
+        "Chest" to GroupColorPair(Color(0xFFF6C6DF), Color(0xFF5D223D)),
+        "Back" to GroupColorPair(Color(0xFFE3EFF8), Color(0xFF163B57)),
+        "Shoulders" to GroupColorPair(Color(0xFFFEEBCC), Color(0xFF7F5209)),
+        "Biceps" to GroupColorPair(Color(0xFFD9F1FF), Color(0xFF32607F)),
+        "Triceps" to GroupColorPair(Color(0xFFF2CCC0), Color(0xFF61221C)),
+        "Legs" to GroupColorPair(Color(0xFFE3F1E6), Color(0xFF0C6B1A)),
+        "Abs" to GroupColorPair(Color(0xFFF8E9F9), Color(0xFF973482)),
+        "Cardio" to GroupColorPair(Color(0xFFFEE9E8), Color(0xFFB71327))
+    )
+)
+
+val DarkWorkoutPalette = WorkoutPalette(
+    isDark = true,
+    appBg = Color(0xFF0D1424),
+    surface = Color(0xFF161E33),
+    subtle = Color(0xFF202A45),
+    border = Color(0xFF27314C),
+    borderStrong = Color(0xFF3B476A),
+    text = Color(0xFFE8ECF6),
+    text2 = Color(0xFFB9C3DA),
+    muted = Color(0xFF98A3BD),
+    faint = Color(0xFF7D89A6),
+    onBrand = Color(0xFFFFFFFF),
+    brand = Color(0xFF1F5EFF),
+    brandHover = Color(0xFF4A7CFF),
+    brandSoft = Color(0xFF17275A),
+    brandBd = Color(0xFF2F4A95),
+    brandInk = Color(0xFFA5BAFE),
+    green = Color(0xFF158A28),
+    greenSoft = Color(0xFF12321C),
+    greenInk = Color(0xFF86D79A),
+    greenMid = Color(0xFF49A55B),
+    greenBd = Color(0xFF2B5C39),
+    greenTint = Color(0xFF0F2417),
+    orange = Color(0xFFFCAC27),
+    orangeSoft = Color(0xFF3A2A0A),
+    orangeInk = Color(0xFFF0C274),
+    redSoft = Color(0xFF3A1416),
+    redInk = Color(0xFFFF9498),
+    tealSoft = Color(0xFF0F2733),
+    tealBd = Color(0xFF2C5772),
+    teal = Color(0xFF65C6FF),
+    figBase = Color(0xFF2F3A57),
+    figHighlight = Color(0xFF5C8BFE),
+    chartTrack = Color(0xFF2F4A95),
+    chartArea = Color(0xFF17275A),
+    toastBg = Color(0xFF202A45),
+    toastFg = Color(0xFFE8ECF6),
+    groupColors = mapOf(
+        "Push" to GroupColorPair(Color(0xFF17275A), Color(0xFFA5BAFE)),
+        "Pull" to GroupColorPair(Color(0xFF2A1F45), Color(0xFFC6B2ED)),
+        "Chest" to GroupColorPair(Color(0xFF3A1F2E), Color(0xFFF6C6DF)),
+        "Back" to GroupColorPair(Color(0xFF14283A), Color(0xFFB9DAED)),
+        "Shoulders" to GroupColorPair(Color(0xFF3A2A0A), Color(0xFFF0C274)),
+        "Biceps" to GroupColorPair(Color(0xFF0F2733), Color(0xFFA0DCFF)),
+        "Triceps" to GroupColorPair(Color(0xFF3A221C), Color(0xFFF2CCC0)),
+        "Legs" to GroupColorPair(Color(0xFF12321C), Color(0xFF86D79A)),
+        "Abs" to GroupColorPair(Color(0xFF2E1A2C), Color(0xFFEFC8EE)),
+        "Cardio" to GroupColorPair(Color(0xFF3A1416), Color(0xFFFF9498))
+    )
+)
+
+val LocalWorkoutPalette = staticCompositionLocalOf { LightWorkoutPalette }
