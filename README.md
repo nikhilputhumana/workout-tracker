@@ -71,13 +71,20 @@ An offline-first Android gym workout tracker built with **Kotlin** and **Jetpack
 
 ---
 
-## Project Setup & Running Tests
+## Project Setup, APK Build & Running Tests
 
-1. Clone the repository and open it in **Android Studio** (or build via Gradle with JDK 17+).
-2. Add your own Firebase configuration (`app/google-services.json`) if you want to enable the optional **Ask Gemini AI** exercise lookup feature. All offline logging, charts, local storage, and JSON export/import features work without any network or Firebase setup.
-3. Build and run unit/Robolectric tests:
+### Option A: Download APK via GitHub Actions (No Android Studio Needed)
+1. Push this repository to GitHub (this triggers the **Build Debug APK** workflow in `.github/workflows/build-apk.yml`).
+2. Open your repository on GitHub (signed in), go to the **Actions** tab, and select the latest **Build Debug APK** run.
+3. Under **Artifacts**, download **`workout-tracker-debug-apk`**, unzip it, and tap `app-debug.apk` on your Android device to install.
+
+### Option B: Build Locally in Android Studio or Gradle
+1. Clone the repository and open it in **Android Studio** (or build via Gradle with JDK 21).
+2. `app/google-services.json` is pre-configured for optional **Ask Gemini AI** lookup; all offline logging, charts, local storage, and JSON export/import features work completely offline as well.
+3. Build the APK or run unit/Robolectric tests in **Android Studio** (**Build → Build App Bundles / APKs → Build APKs**), or via Gradle CLI:
 
 ```bash
-./gradlew assembleDebug
-./gradlew :app:testDebugUnitTest
+gradle assembleDebug
+gradle :app:testDebugUnitTest
 ```
+
