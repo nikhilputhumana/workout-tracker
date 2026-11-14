@@ -85,11 +85,7 @@ class ExerciseAiRepository(private val context: Context) {
         userDescription: String,
         knownExercises: List<ExerciseDefinition>
     ): Result<List<AiExerciseSuggestion>> {
-        val sanitized = userDescription
-            .replace(Regex("[\\r\\n\\t]+"), " ")
-            .replace("\"", "'")
-            .trim()
-            .take(300)
+        val sanitized = sanitizeDescription(userDescription)
         if (sanitized.isEmpty()) {
             return Result.failure(IllegalArgumentException("Describe the machine or movement first."))
         }
@@ -119,9 +115,38 @@ class ExerciseAiRepository(private val context: Context) {
                 activeModel.generateContent(prompt)
             }
             val jsonText = response.text ?: throw IllegalStateException("Empty AI response.")
+            val parsed = parseSuggestionsJson(jsonText, knownExercises)
+            if (parsed.isEmpty()) {
+                Result.failure(IllegalStateException("No matching exercises returned."))
+            } else {
+                Result.success(parsed)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Exercise identification timed out", e)
+            Result.failure(Exception("AI request timed out. You can still pick from offline matches."))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Firebase AI exercise identification failed", e)
+            Result.failure(Exception(e.localizedMessage ?: "AI identification failed. Check connection."))
+        }
+    }
+
+    companion object {
+        internal fun sanitizeDescription(userDescription: String): String =
+            userDescription
+                .replace(Regex("[\\r\\n\\t]+"), " ")
+                .replace("\"", "'")
+                .trim()
+                .take(300)
+
+        internal fun parseSuggestionsJson(
+            jsonText: String,
+            knownExercises: List<ExerciseDefinition>
+        ): List<AiExerciseSuggestion> {
             val root = JSONObject(jsonText)
-            val arr = root.optJSONArray("suggestions") ?: throw IllegalStateException("No matching exercises returned.")
-            val parsed = buildList {
+            val arr = root.optJSONArray("suggestions") ?: return emptyList()
+            return buildList {
                 for (i in 0 until arr.length()) {
                     val item = arr.optJSONObject(i) ?: continue
                     val name = item.optString("exerciseName", "").trim()
@@ -149,19 +174,6 @@ class ExerciseAiRepository(private val context: Context) {
                     )
                 }
             }
-            if (parsed.isEmpty()) {
-                Result.failure(IllegalStateException("No matching exercises returned."))
-            } else {
-                Result.success(parsed)
-            }
-        } catch (e: TimeoutCancellationException) {
-            Log.e(TAG, "Exercise identification timed out", e)
-            Result.failure(Exception("AI request timed out. You can still pick from offline matches."))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Firebase AI exercise identification failed", e)
-            Result.failure(Exception(e.localizedMessage ?: "AI identification failed. Check connection."))
         }
     }
 }

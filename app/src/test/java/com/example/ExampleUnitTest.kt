@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.ai.ExerciseAiRepository
 import com.example.data.BackupManager
 import com.example.domain.BodyMeasurements
 import com.example.domain.BodyWeightEntry
@@ -13,8 +14,10 @@ import com.example.domain.RpeRating
 import com.example.domain.UserProfile
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
+import com.example.ui.components.countSessionPrs
 import com.example.ui.viewmodel.WorkoutTrackerViewModel
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -211,5 +214,66 @@ class ExampleUnitTest {
     assertEquals(listOf(2L, 1L), clubbed.first().sourceIds)
     assertEquals(2, clubbed.first().session.exercises.size)
     assertEquals(0, clubbed.first().session.durationMinutes)
+  }
+
+  @Test
+  fun workoutMath_isValidIsoDate_validatesStrictCalendarDates() {
+    assertTrue(WorkoutMath.isValidIsoDate("2026-02-28"))
+    assertTrue(WorkoutMath.isValidIsoDate("2024-02-29"))
+    assertFalse(WorkoutMath.isValidIsoDate("2025-02-29"))
+    assertFalse(WorkoutMath.isValidIsoDate("2026-02-30"))
+    assertFalse(WorkoutMath.isValidIsoDate("2026-13-01"))
+    assertFalse(WorkoutMath.isValidIsoDate("not-a-date"))
+    assertFalse(WorkoutMath.isValidIsoDate(""))
+  }
+
+  @Test
+  fun countSessionPrs_excludesCardio_andComparesTrueMaxWeightKg() {
+    val priorSession = WorkoutSession(
+      id = 1L,
+      dateIso = "2026-03-01",
+      groups = listOf("Push", "Cardio"),
+      durationMinutes = 50,
+      exercises = listOf(
+        LoggedExercise(1L, "Barbell bench press", "Bar", listOf(LoggedSet(reps = 10, weightKg = 60.0))),
+        LoggedExercise(2L, "Run", "Bodyweight", listOf(LoggedSet(reps = 20, weightKg = 3.0)))
+      )
+    )
+    val newSession = WorkoutSession(
+      id = 2L,
+      dateIso = "2026-03-08",
+      groups = listOf("Push", "Cardio"),
+      durationMinutes = 55,
+      exercises = listOf(
+        // Heavy single beats prior 60 kg even though 1RM (65*(1+1/30)=67.17) < 60*(1+10/30)=80.0
+        LoggedExercise(3L, "Barbell bench press", "Bar", listOf(LoggedSet(reps = 1, weightKg = 65.0))),
+        // Cardio with higher distance must NOT count as strength PR
+        LoggedExercise(4L, "Run", "Bodyweight", listOf(LoggedSet(reps = 35, weightKg = 6.5)))
+      )
+    )
+
+    val prs = countSessionPrs(
+      session = newSession,
+      allSessions = listOf(priorSession, newSession),
+      allExercises = ExerciseCatalog.BUILT_IN_EXERCISES
+    )
+    assertEquals(1, prs)
+  }
+
+  @Test
+  fun computeElapsedSeconds_isMonotonicAcrossBackgroundGaps() {
+    assertEquals(125, WorkoutTrackerViewModel.computeElapsedSeconds(baseSeconds = 5, anchorElapsedRealtimeMs = 10_000L, nowElapsedRealtimeMs = 130_000L))
+    assertEquals(5, WorkoutTrackerViewModel.computeElapsedSeconds(baseSeconds = 5, anchorElapsedRealtimeMs = 10_000L, nowElapsedRealtimeMs = 9_000L))
+  }
+
+  @Test
+  fun exerciseAiRepository_sanitizeDescription_capsAndNormalizesInput() {
+    val noisy = "\n\t  \"Chest\" press\r\nmachine  " + "x".repeat(400)
+    val sanitized = ExerciseAiRepository.sanitizeDescription(noisy)
+    assertEquals(300, sanitized.length)
+    assertFalse(sanitized.contains('"'))
+    assertFalse(sanitized.contains('\n'))
+    assertFalse(sanitized.contains('\r'))
+    assertTrue(sanitized.startsWith("'Chest' press machine"))
   }
 }
