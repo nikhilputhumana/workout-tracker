@@ -456,18 +456,23 @@ fun rememberDatePickerLauncher(
     }
 }
 
-fun countSessionPrs(session: WorkoutSession, allSessions: List<WorkoutSession>): Int {
+fun countSessionPrs(
+    session: WorkoutSession,
+    allSessions: List<WorkoutSession>,
+    allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+): Int {
     var prs = 0
     for (ex in session.exercises) {
-        val best = WorkoutMath.bestSet(ex) ?: continue
-        if (best.weightKg <= 0.0) continue
+        if (ExerciseCatalog.isCardioExercise(ex.name, allExercises)) continue
+        val sessionMax = ex.sets.maxOfOrNull { it.weightKg } ?: 0.0
+        if (sessionMax <= 0.0) continue
         val priorMax = allSessions
             .filter { it.dateIso < session.dateIso }
             .flatMap { it.exercises }
             .filter { it.name.equals(ex.name, ignoreCase = true) }
             .flatMap { it.sets }
             .maxOfOrNull { it.weightKg } ?: 0.0
-        if (priorMax > 0.0 && best.weightKg > priorMax) {
+        if (priorMax > 0.0 && sessionMax > priorMax) {
             prs++
         }
     }

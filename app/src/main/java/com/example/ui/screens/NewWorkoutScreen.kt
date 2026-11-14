@@ -58,17 +58,19 @@ import com.example.ui.theme.LocalWorkoutPalette
 fun NewWorkoutScreen(
     allSessions: List<WorkoutSession>,
     sessionsForGroups: (List<String>) -> List<WorkoutSession>,
-    initialDateIso: String = WorkoutMath.todayIso(),
+    dateIso: String,
+    selectedGroups: List<String>,
+    onDateChange: (String) -> Unit,
+    onSelectPreset: (List<String>) -> Unit,
+    onToggleGroup: (String) -> Unit,
     onContinue: (dateIso: String, groups: List<String>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
     val todayIso = WorkoutMath.todayIso()
-    var dateIso by remember { mutableStateOf(initialDateIso) }
-    var selectedGroups by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val openDatePicker = rememberDatePickerLauncher(dateIso) { picked ->
-        dateIso = picked
+        onDateChange(picked)
     }
 
     Column(
@@ -151,9 +153,7 @@ fun NewWorkoutScreen(
                     BorderedCard(
                         backgroundColor = if (isSelected) palette.brandSoft else palette.surface,
                         borderColor = if (isSelected) palette.brand else palette.border,
-                        onClick = {
-                            selectedGroups = if (isSelected) emptyList() else preset.groups
-                        },
+                        onClick = { onSelectPreset(preset.groups) },
                         modifier = Modifier.testTag("wizard_preset_${preset.name.lowercase()}")
                     ) {
                         Row(
@@ -228,15 +228,9 @@ fun NewWorkoutScreen(
                                 if (isSelected) gpColor.fg else palette.borderStrong
                             ),
                             modifier = Modifier
-                                .heightIn(min = 44.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
-                                .clickable {
-                                    selectedGroups = if (isSelected) {
-                                        selectedGroups - group
-                                    } else {
-                                        selectedGroups + group
-                                    }
-                                }
+                                .clickable { onToggleGroup(group) }
                                 .testTag("wizard_group_${group.lowercase()}")
                         ) {
                             Row(

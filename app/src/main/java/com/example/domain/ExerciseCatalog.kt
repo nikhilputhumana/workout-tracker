@@ -275,6 +275,11 @@ object WorkoutMath {
         }
     }
 
+    fun isValidIsoDate(iso: String): Boolean {
+        val trimmed = iso.trim()
+        return trimmed.length == 10 && parseUtcCalendar(trimmed) != null
+    }
+
     fun isoOffsetDays(days: Int, baseIso: String = todayIso()): String {
         val cal = parseUtcCalendar(baseIso) ?: Calendar.getInstance(utcTz, Locale.US)
         cal.add(Calendar.DAY_OF_YEAR, days)

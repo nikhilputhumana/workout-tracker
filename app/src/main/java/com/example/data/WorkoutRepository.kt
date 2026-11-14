@@ -18,6 +18,11 @@ import com.example.domain.WorkoutSession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+data class ImportResult(
+    val sessionCount: Int,
+    val includedProfile: Boolean
+)
+
 class WorkoutRepository(
     private val dao: WorkoutDao,
     private val prefs: PreferencesRepository,
@@ -121,11 +126,12 @@ class WorkoutRepository(
         name: String,
         groups: List<String>,
         equipment: String,
-        isBodyweight: Boolean = equipment.equals("Bodyweight", ignoreCase = true)
+        isBodyweight: Boolean = equipment.equals("Bodyweight", ignoreCase = true),
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
     ) {
         val cleanName = name.trim()
         if (cleanName.isEmpty()) return
-        val existing = ExerciseCatalog.findByName(cleanName)
+        val existing = ExerciseCatalog.findByName(cleanName, allExercises)
         if (existing != null) return
         val regions = inferRegions(groups)
         dao.insertCustomExercise(
@@ -181,13 +187,61 @@ class WorkoutRepository(
         }
 
         if (draft.editingSessionIds.isNotEmpty()) {
-            val sessionEntity = WorkoutSessionEntity(
-                dateIso = draft.dateIso,
-                groupsCsv = draft.groups.joinToString(","),
-                durationMinutes = newDurationMins,
-                note = draft.sessionNote.trim()
-            )
-            return dao.replaceSessionsByIds(draft.editingSessionIds, sessionEntity, newExPairs)
+            val editSet = draft.editingSessionIds.toSet()
+            val otherSameDateSessions = dao.getSessionsByDate(draft.dateIso)
+                .filter { it.session.id !in editSet }
+            if (otherSameDateSessions.isEmpty()) {
+                val sessionEntity = WorkoutSessionEntity(
+                    dateIso = draft.dateIso,
+                    groupsCsv = draft.groups.joinToString(","),
+                    durationMinutes = newDurationMins,
+                    note = draft.sessionNote.trim()
+                )
+                return dao.replaceSessionsByIds(draft.editingSessionIds, sessionEntity, newExPairs)
+            } else {
+                val existingGroups = otherSameDateSessions.flatMap {
+                    it.session.groupsCsv.split(",").map { g -> g.trim() }.filter { g -> g.isNotEmpty() }
+                }
+                val mergedGroups = (existingGroups + draft.groups).distinct()
+                val mergedDuration = otherSameDateSessions.sumOf { it.session.durationMinutes.coerceAtLeast(0) } + newDurationMins
+                val mergedNote = (otherSameDateSessions.map { it.session.note.trim() } + draft.sessionNote.trim())
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString(" · ")
+                val existingExPairs = otherSameDateSessions.flatMap { sw ->
+                    sw.exercises.sortedBy { it.exercise.orderIndex }.map { exWithSets ->
+                        val exEntity = LoggedExerciseEntity(
+                            sessionId = 0,
+                            orderIndex = 0,
+                            name = exWithSets.exercise.name,
+                            equipment = exWithSets.exercise.equipment,
+                            rpeName = exWithSets.exercise.rpeName,
+                            note = exWithSets.exercise.note
+                        )
+                        val setEntities = exWithSets.sets.sortedBy { it.setIndex }.map { st ->
+                            LoggedSetEntity(
+                                loggedExerciseId = 0,
+                                setIndex = st.setIndex,
+                                reps = st.reps,
+                                weightKg = st.weightKg,
+                                isCompleted = st.isCompleted
+                            )
+                        }
+                        exEntity to setEntities
+                    }
+                }
+                val mergedSession = WorkoutSessionEntity(
+                    dateIso = draft.dateIso,
+                    groupsCsv = mergedGroups.joinToString(","),
+                    durationMinutes = mergedDuration,
+                    note = mergedNote
+                )
+                return dao.replaceSessionsByIds(
+                    idsToDelete = (draft.editingSessionIds + otherSameDateSessions.map { it.session.id }).distinct(),
+                    session = mergedSession,
+                    exercisesWithSets = existingExPairs + newExPairs
+                )
+            }
         }
 
         val sameDateSessions = dao.getSessionsByDate(draft.dateIso)
@@ -276,30 +330,34 @@ class WorkoutRepository(
         customExercises: List<ExerciseDefinition>
     ): String = backupManager.serialize(profile, measures, fees, bodyWeights, sessions, customExercises)
 
-    suspend fun importBackupJson(json: String): Int {
+    suspend fun importBackupJson(json: String): ImportResult {
         val payload = backupManager.deserialize(json)
+        val fallbackDate = WorkoutMath.todayIso()
         val sessionEntities = payload.sessions.map { s ->
+            val safeDate = s.date.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate
             val entity = WorkoutSessionEntity(
-                dateIso = s.date,
-                groupsCsv = s.groups.joinToString(","),
-                durationMinutes = s.mins.coerceAtLeast(0),
-                note = s.note
+                dateIso = safeDate,
+                groupsCsv = s.groups.map { it.trim() }.filter { it.isNotEmpty() }.joinToString(","),
+                durationMinutes = s.mins.coerceIn(0, 1440),
+                note = s.note.trim()
             )
-            val exList = s.ex.mapIndexed { idx, ex ->
+            val exList = s.ex.mapIndexedNotNull { idx, ex ->
+                val exName = ex.name.trim()
+                if (exName.isEmpty()) return@mapIndexedNotNull null
                 val exEntity = LoggedExerciseEntity(
                     sessionId = 0,
                     orderIndex = idx,
-                    name = ex.name,
-                    equipment = ex.equipment,
+                    name = exName,
+                    equipment = ex.equipment.trim().ifEmpty { "Machine" },
                     rpeName = backupManager.parseRpe(ex.rpe)?.name,
-                    note = ex.note
+                    note = ex.note.trim()
                 )
                 val sets = ex.sets.mapIndexed { sIdx, st ->
                     LoggedSetEntity(
                         loggedExerciseId = 0,
                         setIndex = sIdx,
-                        reps = st.reps,
-                        weightKg = st.kg,
+                        reps = st.reps.coerceIn(0, 9999),
+                        weightKg = st.kg.takeIf { it.isFinite() }?.coerceIn(0.0, 2000.0) ?: 0.0,
                         isCompleted = st.completed
                     )
                 }
@@ -307,17 +365,21 @@ class WorkoutRepository(
             }
             entity to exList
         }
-        val bwEntities = payload.bodyWeightLog.map {
-            BodyWeightEntity(dateIso = it.date, weightKg = it.kg)
+        val bwEntities = payload.bodyWeightLog.mapNotNull { entry ->
+            val safeKg = entry.kg.takeIf { it.isFinite() && it in 20.0..350.0 } ?: return@mapNotNull null
+            val safeDate = entry.date.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate
+            BodyWeightEntity(dateIso = safeDate, weightKg = safeKg)
         }
-        val customEntities = payload.customExercises.map {
+        val customEntities = payload.customExercises.mapNotNull { item ->
+            val cleanName = item.name.trim()
+            if (cleanName.isEmpty()) return@mapNotNull null
             CustomExerciseEntity(
-                name = it.name,
-                groupsCsv = it.groups.joinToString(","),
-                equipment = it.equipment,
-                regionsCsv = it.regions.joinToString(","),
-                keywords = it.keywords,
-                isBodyweight = it.isBodyweight
+                name = cleanName,
+                groupsCsv = item.groups.map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("Push") }.joinToString(","),
+                equipment = item.equipment.trim().ifEmpty { "Custom" },
+                regionsCsv = item.regions.map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("chest") }.joinToString(","),
+                keywords = item.keywords.trim(),
+                isBodyweight = item.isBodyweight
             )
         }
 
@@ -331,37 +393,37 @@ class WorkoutRepository(
         if (profile != null && payload.measures != null && payload.fees != null) {
             prefs.restoreFromBackup(
                 profile = UserProfile(
-                    name = profile.name,
-                    age = profile.age,
-                    gender = profile.gender,
-                    heightCm = profile.height,
-                    bodyWeightKg = profile.weight,
-                    bodyFatPercent = profile.bf,
-                    experienceLevel = profile.level,
-                    preferredSplit = profile.split,
+                    name = profile.name.trim(),
+                    age = profile.age.coerceIn(12, 100),
+                    gender = profile.gender.trim().ifEmpty { "Male" },
+                    heightCm = profile.height.coerceIn(100, 240),
+                    bodyWeightKg = profile.weight.takeIf { it.isFinite() }?.coerceIn(25.0, 300.0) ?: 74.5,
+                    bodyFatPercent = profile.bf?.takeIf { it.isFinite() }?.coerceIn(3.0, 65.0),
+                    experienceLevel = profile.level.trim().ifEmpty { "Intermediate" },
+                    preferredSplit = profile.split.trim().ifEmpty { "Push / Pull / Legs (PPL)" },
                     weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 ),
-                waistCm = payload.measures.waist,
-                chestCm = payload.measures.chest,
-                armCm = payload.measures.arm,
+                waistCm = payload.measures.waist.takeIf { it.isFinite() }?.coerceIn(30.0, 250.0) ?: 82.0,
+                chestCm = payload.measures.chest.takeIf { it.isFinite() }?.coerceIn(40.0, 250.0) ?: 102.0,
+                armCm = payload.measures.arm.takeIf { it.isFinite() }?.coerceIn(15.0, 100.0) ?: 35.0,
                 feeRecord = GymFeeRecord(
-                    lastPaidIso = payload.fees.last,
-                    nextDueIso = payload.fees.next,
-                    amount = payload.fees.amount
+                    lastPaidIso = payload.fees.last.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate,
+                    nextDueIso = payload.fees.next.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: WorkoutMath.isoOffsetMonths(1, fallbackDate),
+                    amount = payload.fees.amount.takeIf { it.isFinite() }?.coerceAtLeast(0.0) ?: 1400.0
                 )
             )
         } else if (profile != null) {
             prefs.saveProfile(
                 UserProfile(
-                    name = profile.name,
-                    age = profile.age,
-                    gender = profile.gender,
-                    heightCm = profile.height,
-                    bodyWeightKg = profile.weight,
-                    bodyFatPercent = profile.bf,
-                    experienceLevel = profile.level,
-                    preferredSplit = profile.split,
+                    name = profile.name.trim(),
+                    age = profile.age.coerceIn(12, 100),
+                    gender = profile.gender.trim().ifEmpty { "Male" },
+                    heightCm = profile.height.coerceIn(100, 240),
+                    bodyWeightKg = profile.weight.takeIf { it.isFinite() }?.coerceIn(25.0, 300.0) ?: 74.5,
+                    bodyFatPercent = profile.bf?.takeIf { it.isFinite() }?.coerceIn(3.0, 65.0),
+                    experienceLevel = profile.level.trim().ifEmpty { "Intermediate" },
+                    preferredSplit = profile.split.trim().ifEmpty { "Push / Pull / Legs (PPL)" },
                     weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 )
@@ -369,6 +431,6 @@ class WorkoutRepository(
         } else {
             prefs.setOnboardingComplete(true)
         }
-        return payload.sessions.size
+        return ImportResult(sessionCount = sessionEntities.size, includedProfile = profile != null)
     }
 }

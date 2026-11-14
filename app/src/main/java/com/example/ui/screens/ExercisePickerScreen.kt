@@ -225,13 +225,13 @@ fun ExercisePickerScreen(
                                             if (selected) palette.brand else palette.borderStrong
                                         ),
                                         modifier = Modifier
-                                            .heightIn(min = 38.dp)
+                                            .heightIn(min = 48.dp)
                                             .clip(RoundedCornerShape(4.dp))
                                             .clickable { selectedFilter = f }
                                     ) {
                                         Box(
                                             contentAlignment = Alignment.Center,
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                                         ) {
                                             Text(
                                                 text = f,
@@ -348,19 +348,24 @@ fun ExercisePickerScreen(
                                             shape = RoundedCornerShape(4.dp),
                                             color = palette.subtle,
                                             modifier = Modifier
+                                                .heightIn(min = 48.dp)
                                                 .clip(RoundedCornerShape(4.dp))
                                                 .clickable {
                                                     describeQuery = example
                                                     onResetAiLookup()
                                                 }
                                         ) {
-                                            Text(
-                                                text = "\"${example.take(26)}…\"",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Medium,
-                                                color = palette.text2,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                                            )
+                                            Box(
+                                                contentAlignment = Alignment.Center,
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "\"${example.take(26)}…\"",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = palette.text2
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -397,7 +402,7 @@ fun ExercisePickerScreen(
                                             contentColor = palette.brandInk
                                         ),
                                         modifier = Modifier
-                                            .heightIn(min = 44.dp)
+                                            .heightIn(min = 48.dp)
                                             .testTag("picker_ask_gemini_button")
                                     ) {
                                         Icon(
@@ -741,9 +746,17 @@ private fun CustomExerciseDialog(
                             shape = RoundedCornerShape(4.dp),
                             border = BorderStroke(1.dp, if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                             color = if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            modifier = Modifier.clickable { equipment = eq }
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { equipment = eq }
                         ) {
-                            Text(eq, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(eq, fontSize = 13.sp)
+                            }
                         }
                     }
                 }
@@ -755,11 +768,19 @@ private fun CustomExerciseDialog(
                             shape = RoundedCornerShape(4.dp),
                             border = BorderStroke(1.dp, if (sel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline),
                             color = if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
-                            modifier = Modifier.clickable {
-                                selectedGroups = if (sel && selectedGroups.size > 1) selectedGroups - grp else selectedGroups + grp
-                            }
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable {
+                                    selectedGroups = if (sel && selectedGroups.size > 1) selectedGroups - grp else selectedGroups + grp
+                                }
                         ) {
-                            Text(grp, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Text(grp, fontSize = 13.sp)
+                            }
                         }
                     }
                 }

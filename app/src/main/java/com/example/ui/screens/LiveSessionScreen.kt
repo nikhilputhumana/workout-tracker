@@ -190,7 +190,7 @@ fun LiveSessionScreen(
                                     }
                                 }
                                 OutlinedTextField(
-                                    value = (draft.manualDurationMinutes ?: 0).let { if (it > 0) it.toString() else "" },
+                                    value = draft.manualDurationMinutes?.toString() ?: "",
                                     onValueChange = onUpdateManualDuration,
                                     label = { Text("Duration (min)") },
                                     placeholder = { Text("Optional") },
@@ -382,7 +382,7 @@ fun LiveSessionScreen(
                                     )
                                     TextButton(
                                         onClick = onOpenAddPicker,
-                                        modifier = Modifier.heightIn(min = 44.dp)
+                                        modifier = Modifier.heightIn(min = 48.dp)
                                     ) {
                                         Text("Open full picker or create custom", color = palette.brand)
                                     }
@@ -799,7 +799,7 @@ private fun LiveExerciseCard(
                 }
                 IconButton(
                     onClick = onRemove,
-                    modifier = Modifier.size(36.dp)
+                    modifier = Modifier.size(48.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Close,
@@ -953,7 +953,7 @@ private fun LiveExerciseCard(
                     border = BorderStroke(1.5.dp, palette.green),
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 46.dp)
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable(onClick = onAddSet)
                         .testTag("add_set_${exercise.name.lowercase().replace(' ', '_')}")
@@ -976,7 +976,7 @@ private fun LiveExerciseCard(
                         if (canRemove) palette.redInk else palette.redInk.copy(alpha = 0.3f)
                     ),
                     modifier = Modifier
-                        .heightIn(min = 46.dp)
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable(enabled = canRemove, onClick = onRemoveLastSet)
                         .testTag("remove_set_${exercise.name.lowercase().replace(' ', '_')}")
@@ -1030,7 +1030,7 @@ private fun LiveExerciseCard(
                             border = BorderStroke(1.5.dp, borderColor),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 46.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable { onSelectRpe(rating) }
                                 .testTag("rpe_${rating.name.lowercase()}")

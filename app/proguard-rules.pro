@@ -1,21 +1,15 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Moshi code-generated JsonAdapters and reflective Kotlin fallback
+-keep class com.example.data.*JsonAdapter { *; }
+-keep @com.squareup.moshi.JsonClass class com.example.data.** { *; }
+-keepnames class kotlin.Metadata { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Keep domain models & enums referenced by Room/Compose/BackupManager
+-keep enum com.example.domain.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Firebase App Check & Google Play Services resource lookups
+-keep class com.google.firebase.appcheck.** { *; }
+-keepclassmembers class com.example.ai.AppCheckHelperKt { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Preserve line numbers for crash stack traces while hiding file names
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

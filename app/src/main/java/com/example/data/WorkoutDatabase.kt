@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
         CustomExerciseEntity::class
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class WorkoutDatabase : RoomDatabase() {
     abstract fun workoutDao(): WorkoutDao

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -46,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.ExerciseCatalog
 import com.example.domain.LoggedExercise
 import com.example.domain.WorkoutMath
 import com.example.ui.components.BorderedCard
@@ -69,6 +71,7 @@ fun StatsScreen(
 ) {
     val palette = LocalWorkoutPalette.current
     var newWeightText by remember { mutableStateOf("") }
+    var weightInputError by remember { mutableStateOf<String?>(null) }
     var liftedShowLast by remember { mutableStateOf(false) }
     var caloriesShowLast by remember { mutableStateOf(false) }
     val todayIso = WorkoutMath.todayIso()
@@ -76,87 +79,125 @@ fun StatsScreen(
     val clubbed = remember(uiState.sessions) {
         WorkoutMath.clubSessionsByDate(uiState.sessions)
     }
-    val clubbedSessions = clubbed.map { it.session }
+    val clubbedSessions = remember(clubbed) { clubbed.map { it.session } }
     val latestSession = clubbedSessions.firstOrNull()
 
-    val allVol = clubbedSessions.sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
-    val lastVol = latestSession?.let { WorkoutMath.sessionVolume(it, uiState.allExercises) } ?: 0.0
-
-    val allKcal = clubbedSessions.sumOf {
-        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+    val allVol = remember(clubbedSessions, uiState.allExercises) {
+        clubbedSessions.sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
     }
-    val lastKcal = latestSession?.let {
-        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
-    } ?: 0
+    val lastVol = remember(latestSession, uiState.allExercises) {
+        latestSession?.let { WorkoutMath.sessionVolume(it, uiState.allExercises) } ?: 0.0
+    }
 
-    val timedSessions = clubbedSessions.filter { it.durationMinutes > 0 }
-    val avgMins: Int? = if (timedSessions.isEmpty()) null
-    else timedSessions.sumOf { it.durationMinutes } / timedSessions.size
-    val avgSets = if (clubbedSessions.isEmpty()) 0
-    else clubbedSessions.sumOf { WorkoutMath.sessionSets(it) } / clubbedSessions.size
+    val allKcal = remember(clubbedSessions, uiState.profile.bodyWeightKg, uiState.allExercises) {
+        clubbedSessions.sumOf {
+            WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+        }
+    }
+    val lastKcal = remember(latestSession, uiState.profile.bodyWeightKg, uiState.allExercises) {
+        latestSession?.let {
+            WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+        } ?: 0
+    }
+
+    val avgMins: Int? = remember(clubbedSessions) {
+        val timed = clubbedSessions.filter { it.durationMinutes > 0 }
+        if (timed.isEmpty()) null else timed.sumOf { it.durationMinutes } / timed.size
+    }
+    val avgSets = remember(clubbedSessions) {
+        if (clubbedSessions.isEmpty()) 0
+        else clubbedSessions.sumOf { WorkoutMath.sessionSets(it) } / clubbedSessions.size
+    }
 
     val bwLog = uiState.bodyWeightLog
     val latestBw = bwLog.lastOrNull()?.weightKg ?: uiState.profile.bodyWeightKg
-    val bwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
+    val rawBwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
+    val bwDelta = if (abs(rawBwDelta) < 0.05) 0.0 else rawBwDelta
     val bwDeltaStr = "${if (bwDelta > 0) "+" else ""}${String.format(Locale.US, "%.1f", bwDelta)} kg"
 
-    val bars = (5 downTo 0).map { weekBack ->
-        val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
-        val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
-        val vol = clubbedSessions
-            .filter { it.dateIso in startIso..endIso }
-            .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
-        VolumeBarPoint(
-            label = WorkoutMath.shortWeekBucketLabel(startIso),
-            topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
-            value = vol.toFloat(),
-            isHighlighted = weekBack == 0
-        )
+    val bars = remember(clubbedSessions, uiState.allExercises, todayIso) {
+        (5 downTo 0).map { weekBack ->
+            val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
+            val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
+            val vol = clubbedSessions
+                .filter { it.dateIso in startIso..endIso }
+                .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
+            VolumeBarPoint(
+                label = WorkoutMath.shortWeekBucketLabel(startIso),
+                topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
+                value = vol.toFloat(),
+                isHighlighted = weekBack == 0
+            )
+        }
     }
 
-    val bwPoints = bwLog.map { entry ->
-        LineChartPoint(
-            label = WorkoutMath.formatDayMonth(entry.dateIso),
-            value = entry.weightKg.toFloat(),
-            unit = " kg"
-        )
+    val bwPoints = remember(bwLog) {
+        bwLog.map { entry ->
+            LineChartPoint(
+                label = WorkoutMath.formatDayMonth(entry.dateIso),
+                value = entry.weightKg.toFloat(),
+                unit = " kg"
+            )
+        }
     }
 
-    val trackedLifts = listOf(
-        "Back squat",
-        "Barbell bench press",
-        "Overhead press",
-        "Lat pulldown",
-        "Barbell curl"
-    )
-    val strengthRows = trackedLifts.mapNotNull { name ->
-        val rows = allSessionsOf(name)
-        if (rows.isEmpty()) return@mapNotNull null
-        val first = rows.last()
-        val latest = rows.first()
-        val firstBest = WorkoutMath.bestSet(first.second) ?: return@mapNotNull null
-        val latestBest = WorkoutMath.bestSet(latest.second) ?: return@mapNotNull null
-        val first1Rm = WorkoutMath.epley1Rm(firstBest.reps, firstBest.weightKg)
-        val latest1Rm = WorkoutMath.epley1Rm(latestBest.reps, latestBest.weightKg)
-        val pct = if (first1Rm > 0.0) (latest1Rm / first1Rm - 1.0) * 100.0 else 0.0
-        Triple(
-            name,
-            "${WorkoutMath.formatKg(firstBest.weightKg)} kg → ${WorkoutMath.formatKg(latestBest.weightKg)} kg",
-            pct
+    val strengthRows = remember(uiState.sessions, uiState.allExercises) {
+        val coreOrder = listOf(
+            "Back squat",
+            "Barbell bench press",
+            "Overhead press",
+            "Lat pulldown",
+            "Barbell curl"
         )
-    }
-
-    val fourWeeksAgoIso = WorkoutMath.isoOffsetDays(-28, todayIso)
-    val setsByGroup = mutableMapOf<String, Int>()
-    clubbedSessions
-        .filter { it.dateIso >= fourWeeksAgoIso }
-        .forEach { session ->
-            session.exercises.forEach { ex ->
-                val primary = WorkoutMath.primaryMuscleGroupForStats(ex, session, uiState.allExercises)
-                setsByGroup[primary] = (setsByGroup[primary] ?: 0) + ex.sets.size
+        val coreRank = coreOrder.withIndex().associate { it.value.lowercase(Locale.US) to it.index }
+        val byExercise = LinkedHashMap<String, MutableList<Pair<String, LoggedExercise>>>()
+        for (session in uiState.sessions.sortedByDescending { it.dateIso }) {
+            for (ex in session.exercises) {
+                if (ExerciseCatalog.isCardioExercise(ex.name, uiState.allExercises)) continue
+                if (ex.sets.none { it.weightKg > 0.0 }) continue
+                byExercise.getOrPut(ex.name) { mutableListOf() }.add(session.dateIso to ex)
             }
         }
-    val sortedGroups = setsByGroup.entries.sortedByDescending { it.value }
+        val candidates = byExercise.entries
+            .filter { (name, rows) -> rows.size >= 2 || name.lowercase(Locale.US) in coreRank }
+            .sortedWith(
+                compareBy<Map.Entry<String, MutableList<Pair<String, LoggedExercise>>>>(
+                    { coreRank[it.key.lowercase(Locale.US)] ?: Int.MAX_VALUE },
+                    { -it.value.size }
+                )
+            )
+            .take(8)
+
+        candidates.mapNotNull { (name, rows) ->
+            val first = rows.last()
+            val latest = rows.first()
+            val firstBest = WorkoutMath.bestSet(first.second) ?: return@mapNotNull null
+            val latestBest = WorkoutMath.bestSet(latest.second) ?: return@mapNotNull null
+            val first1Rm = WorkoutMath.epley1Rm(firstBest.reps, firstBest.weightKg)
+            val latest1Rm = WorkoutMath.epley1Rm(latestBest.reps, latestBest.weightKg)
+            val rawPct = if (first1Rm > 0.0) (latest1Rm / first1Rm - 1.0) * 100.0 else 0.0
+            val pct = if (abs(rawPct) < 0.05) 0.0 else rawPct
+            Triple(
+                name,
+                "${WorkoutMath.formatKg(firstBest.weightKg)} kg → ${WorkoutMath.formatKg(latestBest.weightKg)} kg",
+                pct
+            )
+        }
+    }
+
+    val sortedGroups = remember(clubbedSessions, uiState.allExercises, todayIso) {
+        val fourWeeksAgoIso = WorkoutMath.isoOffsetDays(-28, todayIso)
+        val setsByGroup = mutableMapOf<String, Int>()
+        clubbedSessions
+            .filter { it.dateIso >= fourWeeksAgoIso }
+            .forEach { session ->
+                session.exercises.forEach { ex ->
+                    val primary = WorkoutMath.primaryMuscleGroupForStats(ex, session, uiState.allExercises)
+                    setsByGroup[primary] = (setsByGroup[primary] ?: 0) + ex.sets.size
+                }
+            }
+        setsByGroup.entries.sortedByDescending { it.value }
+    }
     val maxGroupSets = (sortedGroups.firstOrNull()?.value ?: 1).coerceAtLeast(1)
 
     LazyColumn(
@@ -324,12 +365,26 @@ fun StatsScreen(
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
                         OutlinedTextField(
                             value = newWeightText,
-                            onValueChange = { newWeightText = it },
+                            onValueChange = { raw ->
+                                newWeightText = buildString {
+                                    var dotSeen = false
+                                    for (ch in raw) {
+                                        if (ch.isDigit()) append(ch)
+                                        else if (ch == '.' && !dotSeen) {
+                                            dotSeen = true
+                                            append(ch)
+                                        }
+                                    }
+                                }.take(6)
+                                weightInputError = null
+                            },
                             placeholder = { Text(WorkoutMath.formatKg(latestBw)) },
+                            isError = weightInputError != null,
+                            supportingText = weightInputError?.let { msg -> { Text(msg) } },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = OutlinedTextFieldDefaults.colors(
@@ -347,9 +402,12 @@ fun StatsScreen(
                         Button(
                             onClick = {
                                 val parsed = newWeightText.toDoubleOrNull()
-                                if (parsed != null && parsed > 20.0) {
+                                if (parsed != null && parsed in 20.0..350.0) {
                                     onLogBodyWeight(parsed)
                                     newWeightText = ""
+                                    weightInputError = null
+                                } else {
+                                    weightInputError = "Enter 20–350 kg"
                                 }
                             },
                             shape = RoundedCornerShape(6.dp),
@@ -358,7 +416,7 @@ fun StatsScreen(
                                 contentColor = palette.brandInk
                             ),
                             modifier = Modifier
-                                .heightIn(min = 52.dp)
+                                .heightIn(min = 56.dp)
                                 .testTag("stats_log_bw_button")
                         ) {
                             Text("Log today", fontWeight = FontWeight.Medium)
@@ -521,20 +579,25 @@ private fun ModeTogglePill(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
-    Surface(
-        shape = RoundedCornerShape(4.dp),
-        color = palette.brandSoft,
-        border = BorderStroke(1.dp, palette.brandBd),
+    Box(
+        contentAlignment = Alignment.CenterEnd,
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onToggle)
     ) {
-        Text(
-            text = if (isLast) "Last" else "Total",
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = palette.brandInk,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-        )
+        Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = palette.brandSoft,
+            border = BorderStroke(1.dp, palette.brandBd)
+        ) {
+            Text(
+                text = if (isLast) "Last" else "Total",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.brandInk,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
     }
 }

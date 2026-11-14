@@ -1,5 +1,6 @@
 package com.example.ai
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -15,6 +16,8 @@ private const val DEBUG_STORE_PREFIX = "com.google.firebase.appcheck.debug.store
 private const val DEBUG_SECRET_KEY = "com.google.firebase.appcheck.debug.DEBUG_SECRET"
 private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
+// getIdentifier keeps Firebase optional-resource lookup build-safe when google-services.json varies.
+@SuppressLint("DiscouragedApi")
 fun ensureFirebaseInitialized(context: Context): Boolean {
     if (FirebaseApp.getApps(context).isNotEmpty()) return true
     val appIdRes = context.resources.getIdentifier("google_app_id", "string", context.packageName)
@@ -25,6 +28,9 @@ fun ensureFirebaseInitialized(context: Context): Boolean {
     return FirebaseApp.initializeApp(context) != null || FirebaseApp.getApps(context).isNotEmpty()
 }
 
+// Synchronous commit() is required before DebugAppCheckProviderFactory reads the persisted secret;
+// res/raw/keep.xml preserves recaptcha_site_key from resource shrinking.
+@SuppressLint("ApplySharedPref", "DiscouragedApi")
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
         if (!ensureFirebaseInitialized(context)) {
@@ -32,8 +38,8 @@ fun configureAppCheck(context: Context, intent: Intent?) {
         }
 
         if (BuildConfig.DEBUG) {
-            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
-            if (!debugToken.isNullOrEmpty()) {
+            val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)?.trim()?.takeIf { it.isNotEmpty() }
+            if (debugToken != null) {
                 val persistenceKey = FirebaseApp.getInstance().persistenceKey
                 val prefs = context.getSharedPreferences(
                     "$DEBUG_STORE_PREFIX$persistenceKey",

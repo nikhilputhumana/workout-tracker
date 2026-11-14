@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.ExerciseAiRepository
@@ -42,6 +43,11 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import java.util.UUID
 
+data class WizardSelectionState(
+    val dateIso: String = WorkoutMath.todayIso(),
+    val groups: List<String> = emptyList()
+)
+
 data class MainUiState(
     val isLoaded: Boolean = false,
     val showLaunchSplash: Boolean = true,
@@ -54,6 +60,7 @@ data class MainUiState(
     val customExercises: List<ExerciseDefinition> = emptyList(),
     val allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
     val activeDraft: ActiveDraft? = null,
+    val wizardState: WizardSelectionState = WizardSelectionState(),
     val aiLookupState: AiLookupState = AiLookupState.Idle,
     val toastBanner: ToastBanner? = null
 )
@@ -66,6 +73,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     private val aiRepository = ExerciseAiRepository(application)
 
     private val _activeDraft = MutableStateFlow<ActiveDraft?>(null)
+    private val _wizardState = MutableStateFlow(WizardSelectionState())
     private val _aiState = MutableStateFlow<AiLookupState>(AiLookupState.Idle)
     private val _toast = MutableStateFlow<ToastBanner?>(null)
     private val _showLaunchSplash = MutableStateFlow(true)
@@ -73,6 +81,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     private var timerJob: Job? = null
     private var toastJob: Job? = null
+    private var timerAnchorElapsedMs: Long? = null
+    private var timerBaseSeconds: Int = 0
 
     init {
         viewModelScope.launch {
@@ -104,10 +114,10 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         ) { sessions, bw, custom, bundled ->
             listOf(sessions, bw, custom, bundled)
         },
-        _activeDraft,
+        combine(_activeDraft, _wizardState) { draft, wizard -> draft to wizard },
         _aiState,
         combine(_toast, _showLaunchSplash) { toast, splash -> toast to splash }
-    ) { prefsList, dbList, draft, aiState, toastSplash ->
+    ) { prefsList, dbList, draftWizard, aiState, toastSplash ->
         val profile = prefsList[0] as UserProfile
         val measures = prefsList[1] as BodyMeasurements
         val fee = prefsList[2] as GymFeeRecord
@@ -133,7 +143,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             bodyWeightLog = bw,
             customExercises = custom,
             allExercises = combinedExercises,
-            activeDraft = draft,
+            activeDraft = draftWizard.first,
+            wizardState = draftWizard.second,
             aiLookupState = aiState,
             toastBanner = toastSplash.first
         )
@@ -191,18 +202,21 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     ) {
         viewModelScope.launch {
             runCatching {
-                val savedProfile = pendingProfile.copy(
-                    name = pendingProfile.name.ifBlank { "Athlete" },
-                    onboardingComplete = true
-                )
-                repository.saveProfile(savedProfile)
-                if (nextFeeDueIso.isNotBlank()) {
-                    val currentFee = uiState.value.gymFee
-                    repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
+                val result = repository.importBackupJson(json)
+                if (!result.includedProfile) {
+                    val savedProfile = pendingProfile.copy(
+                        name = pendingProfile.name.ifBlank { "Athlete" },
+                        onboardingComplete = true
+                    )
+                    repository.saveProfile(savedProfile)
+                    if (nextFeeDueIso.isNotBlank()) {
+                        val currentFee = uiState.value.gymFee
+                        repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
+                    }
                 }
-                repository.importBackupJson(json)
-            }.onSuccess { count ->
-                showToast("Imported $count workouts successfully")
+                result
+            }.onSuccess { result ->
+                showToast("Imported ${result.sessionCount} workouts successfully")
             }.onFailure { err ->
                 showToast(err.message ?: "That file is not a Workout Tracker backup", ToastTone.WARNING)
             }
@@ -309,8 +323,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             runCatching {
                 repository.importBackupJson(json)
-            }.onSuccess { count ->
-                showToast("Imported $count workouts successfully")
+            }.onSuccess { result ->
+                showToast("Imported ${result.sessionCount} workouts successfully")
             }.onFailure { err ->
                 showToast(err.message ?: "That file is not a Workout Tracker backup", ToastTone.WARNING)
             }
@@ -324,10 +338,41 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
+    // ── Wizard Selection State ──
+
+    fun setWizardDate(dateIso: String) {
+        _wizardState.update { it.copy(dateIso = dateIso) }
+    }
+
+    fun selectWizardPreset(groups: List<String>) {
+        _wizardState.update { current ->
+            val alreadySelected = groups.all { it in current.groups }
+            current.copy(groups = if (alreadySelected) emptyList() else groups)
+        }
+    }
+
+    fun toggleWizardGroup(group: String) {
+        _wizardState.update { current ->
+            val updated = if (group in current.groups) {
+                current.groups - group
+            } else {
+                current.groups + group
+            }
+            current.copy(groups = updated)
+        }
+    }
+
+    fun resetWizard() {
+        _wizardState.value = WizardSelectionState(dateIso = WorkoutMath.todayIso(), groups = emptyList())
+    }
+
     // ── Live Draft, Edit History & Timer ──
 
     fun startNewDraft(dateIso: String = WorkoutMath.todayIso(), groups: List<String> = emptyList()) {
         timerJob?.cancel()
+        timerAnchorElapsedMs = null
+        timerBaseSeconds = 0
+        resetWizard()
         _activeDraft.value = ActiveDraft(
             dateIso = dateIso,
             groups = groups,
@@ -342,16 +387,22 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun beginSessionFromWizard(dateIso: String, groups: List<String>) {
         val current = _activeDraft.value
-        _activeDraft.value = if (current == null || current.editingSessionIds.isNotEmpty()) {
-            ActiveDraft(dateIso = dateIso, groups = groups)
+        if (current == null || current.editingSessionIds.isNotEmpty()) {
+            timerJob?.cancel()
+            timerAnchorElapsedMs = null
+            timerBaseSeconds = 0
+            _activeDraft.value = ActiveDraft(dateIso = dateIso, groups = groups)
         } else {
-            current.copy(dateIso = dateIso, groups = groups)
+            _activeDraft.update { it?.copy(dateIso = dateIso, groups = groups) }
         }
+        resetWizard()
         startTimerIfNeeded()
     }
 
     fun startEditingSession(session: WorkoutSession, sourceIds: List<Long>) {
         timerJob?.cancel()
+        timerAnchorElapsedMs = null
+        timerBaseSeconds = 0
         val draftExercises = session.exercises.map { ex ->
             DraftExercise(
                 localId = UUID.randomUUID().toString(),
@@ -375,7 +426,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             sessionNote = session.note,
             elapsedSeconds = session.durationMinutes * 60,
             editingSessionIds = sourceIds.ifEmpty { listOf(session.id) },
-            manualDurationMinutes = session.durationMinutes
+            manualDurationMinutes = session.durationMinutes.takeIf { it > 0 }
         )
     }
 
@@ -385,25 +436,44 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun updateDraftManualDuration(minsText: String) {
         val digits = minsText.filter { it.isDigit() }.take(3)
-        val parsed = if (digits.isEmpty()) 0 else digits.toIntOrNull()?.coerceIn(0, 600) ?: 0
+        val parsed = if (digits.isEmpty()) null else digits.toIntOrNull()?.coerceIn(0, 600)
         _activeDraft.update { d ->
-            d?.copy(
+            if (d == null) null
+            else d.copy(
                 manualDurationMinutes = parsed,
-                elapsedSeconds = parsed * 60
+                elapsedSeconds = (parsed ?: 0) * 60
             )
         }
     }
 
+    private fun currentLiveElapsedSeconds(fallbackSeconds: Int): Int {
+        val anchor = timerAnchorElapsedMs ?: return fallbackSeconds
+        return computeElapsedSeconds(timerBaseSeconds, anchor, SystemClock.elapsedRealtime())
+    }
+
     private fun startTimerIfNeeded() {
+        val initial = _activeDraft.value ?: return
+        if (initial.editingSessionIds.isNotEmpty()) return
+        if (timerAnchorElapsedMs == null) {
+            timerBaseSeconds = initial.elapsedSeconds
+            timerAnchorElapsedMs = SystemClock.elapsedRealtime()
+        }
         if (timerJob?.isActive == true) return
         timerJob = viewModelScope.launch {
             while (true) {
                 delay(1_000)
-                val draft = _activeDraft.value
-                if (draft == null || draft.editingSessionIds.isNotEmpty()) {
-                    break
+                val anchor = timerAnchorElapsedMs ?: break
+                val liveSeconds = computeElapsedSeconds(timerBaseSeconds, anchor, SystemClock.elapsedRealtime())
+                var stillRunning = false
+                _activeDraft.update { d ->
+                    if (d == null || d.editingSessionIds.isNotEmpty()) {
+                        d
+                    } else {
+                        stillRunning = true
+                        if (d.elapsedSeconds == liveSeconds) d else d.copy(elapsedSeconds = liveSeconds)
+                    }
                 }
-                _activeDraft.value = draft.copy(elapsedSeconds = draft.elapsedSeconds + 1)
+                if (!stillRunning) break
             }
         }
     }
@@ -483,7 +553,12 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             _activeDraft.value?.groups?.ifEmpty { listOf("Push") } ?: listOf("Push")
         }
         viewModelScope.launch {
-            repository.addCustomExercise(cleanName, targetGroups, equipment)
+            repository.addCustomExercise(
+                name = cleanName,
+                groups = targetGroups,
+                equipment = equipment,
+                allExercises = uiState.value.allExercises
+            )
             addExerciseToDraft(cleanName, equipment)
         }
     }
@@ -619,23 +694,34 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     fun discardDraft() {
         val wasEditing = _activeDraft.value?.editingSessionIds?.isNotEmpty() == true
         timerJob?.cancel()
+        timerAnchorElapsedMs = null
+        timerBaseSeconds = 0
+        resetWizard()
         _activeDraft.value = null
         showToast(if (wasEditing) "Edit cancelled" else "Draft discarded", ToastTone.INFO)
     }
 
     fun finishDraft(onSaved: (wasEditing: Boolean) -> Unit) {
-        val draft = _activeDraft.value ?: return
-        if (draft.exercises.isEmpty()) {
+        val rawDraft = _activeDraft.value ?: return
+        if (rawDraft.exercises.isEmpty()) {
             showToast("Add at least one exercise before saving", ToastTone.WARNING)
             return
         }
-        val wasEditing = draft.editingSessionIds.isNotEmpty()
+        val wasEditing = rawDraft.editingSessionIds.isNotEmpty()
+        val draft = if (wasEditing) {
+            rawDraft
+        } else {
+            rawDraft.copy(elapsedSeconds = currentLiveElapsedSeconds(rawDraft.elapsedSeconds))
+        }
         viewModelScope.launch {
             val allEx = uiState.value.allExercises
             val vol = WorkoutMath.draftVolume(draft, allEx)
             val kcal = WorkoutMath.estimateDraftCalories(draft, uiState.value.profile.bodyWeightKg, allEx)
             repository.saveCompletedDraft(draft)
             timerJob?.cancel()
+            timerAnchorElapsedMs = null
+            timerBaseSeconds = 0
+            resetWizard()
             _activeDraft.value = null
             val msg = when {
                 wasEditing -> "Workout updated successfully"
@@ -736,6 +822,15 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     }
 
     companion object {
+        internal fun computeElapsedSeconds(
+            baseSeconds: Int,
+            anchorElapsedRealtimeMs: Long,
+            nowElapsedRealtimeMs: Long
+        ): Int {
+            val deltaSeconds = ((nowElapsedRealtimeMs - anchorElapsedRealtimeMs).coerceAtLeast(0L) / 1_000L).toInt()
+            return (baseSeconds + deltaSeconds).coerceAtLeast(0)
+        }
+
         internal fun nextPyramidReps(existingSets: List<DraftSet>): String? {
             val reps = existingSets.map { it.repsText.trim() }
             return when {

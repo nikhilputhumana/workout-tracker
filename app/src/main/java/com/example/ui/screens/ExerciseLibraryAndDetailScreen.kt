@@ -51,6 +51,7 @@ import com.example.domain.ExerciseDefinition
 import com.example.domain.LoggedExercise
 import com.example.domain.RpeRating
 import com.example.domain.WorkoutMath
+import com.example.domain.WorkoutSession
 import com.example.ui.components.BorderedCard
 import com.example.ui.components.KpiTile
 import com.example.ui.components.LineChartPoint
@@ -62,12 +63,15 @@ import com.example.ui.components.TrendLineChart
 import com.example.ui.theme.LocalWorkoutPalette
 import java.util.Locale
 
+private data class ExerciseSummaryStats(
+    val lastSession: Pair<String, LoggedExercise>,
+    val personalRecordKg: Double
+)
+
 @Composable
 fun ExerciseLibraryScreen(
     allExercises: List<ExerciseDefinition>,
-    lastSessionOf: (String) -> Pair<String, LoggedExercise>?,
-    personalRecordKg: (String) -> Double,
-    allSessionsOf: (String) -> List<Pair<String, LoggedExercise>>,
+    sessions: List<WorkoutSession>,
     onOpenDetail: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -80,12 +84,40 @@ fun ExerciseLibraryScreen(
         "Legs", "Biceps", "Triceps", "Abs", "Cardio"
     )
 
-    val itemsList = remember(query, filter, allExercises) {
+    val statsByExercise = remember(sessions, allExercises) {
+        val cardioNames = allExercises
+            .filter { ExerciseCatalog.isCardioExercise(it.name, allExercises) }
+            .map { it.name.lowercase(Locale.US) }
+            .toSet()
+        val lastMap = HashMap<String, Pair<String, LoggedExercise>>()
+        val prMap = HashMap<String, Double>()
+        for (session in sessions.sortedByDescending { it.dateIso }) {
+            for (ex in session.exercises) {
+                val key = ex.name.lowercase(Locale.US)
+                if (key !in lastMap) {
+                    lastMap[key] = session.dateIso to ex
+                }
+                if (key !in cardioNames) {
+                    val maxW = ex.sets.maxOfOrNull { it.weightKg } ?: 0.0
+                    val prev = prMap[key] ?: 0.0
+                    if (maxW > prev) prMap[key] = maxW
+                }
+            }
+        }
+        lastMap.mapValues { (key, lastPair) ->
+            ExerciseSummaryStats(
+                lastSession = lastPair,
+                personalRecordKg = prMap[key] ?: 0.0
+            )
+        }
+    }
+
+    val itemsList = remember(query, filter, allExercises, statsByExercise) {
         val q = query.trim().lowercase()
         allExercises.filter { def ->
             val fMatch = when (filter) {
                 "All" -> true
-                "Logged by me" -> allSessionsOf(def.name).isNotEmpty()
+                "Logged by me" -> def.name.lowercase(Locale.US) in statsByExercise
                 else -> def.groups.any { it.equals(filter, ignoreCase = true) }
             }
             if (!fMatch) return@filter false
@@ -153,13 +185,14 @@ fun ExerciseLibraryScreen(
                             if (selected) palette.brand else palette.borderStrong
                         ),
                         modifier = Modifier
-                            .heightIn(min = 36.dp)
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { filter = chip }
+                            .testTag("library_filter_${chip.lowercase().replace(' ', '_')}")
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = chip,
@@ -174,8 +207,9 @@ fun ExerciseLibraryScreen(
         }
 
         items(itemsList, key = { it.name }) { def ->
-            val last = lastSessionOf(def.name)
-            val pr = personalRecordKg(def.name)
+            val stats = statsByExercise[def.name.lowercase(Locale.US)]
+            val last = stats?.lastSession
+            val pr = stats?.personalRecordKg ?: 0.0
             val isCardio = ExerciseCatalog.isCardioExercise(def.name, allExercises)
             val lastBest = last?.second?.let { WorkoutMath.bestSet(it) }
             val primaryMetric = if (isCardio) {

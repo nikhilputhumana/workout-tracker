@@ -266,6 +266,8 @@ fun WorkoutTrackerApp(
 
                     val topLevelRoutes = remember { MAIN_TABS.map { it.route }.toSet() }
                     val isTopLevel = currentRoute in topLevelRoutes
+                    val isEditingDraft = uiState.activeDraft?.editingSessionIds?.isNotEmpty() == true
+                    val workoutOwnerTab = if (isEditingDraft) Routes.HISTORY else Routes.HOME
                     val isWorkoutFlowRoute = currentRoute == Routes.NEW_WORKOUT ||
                         currentRoute == Routes.LIVE_SESSION ||
                         currentRoute.startsWith("exercise_picker") ||
@@ -335,23 +337,23 @@ fun WorkoutTrackerApp(
 
                     fun navigateTopTab(route: String) {
                         if (route != Routes.HISTORY) historyExpandId = null
-                        if (route == Routes.HOME) {
+                        if (route == workoutOwnerTab) {
                             when {
                                 isWorkoutFlowRoute -> {
-                                    // 2nd Home tap (already creating/documenting a workout) -> go to actual Home page
-                                    if (uiState.activeDraft == null) {
+                                    // 2nd tap on owning tab (Home for new workout, History for editing) -> show owning tab root
+                                    if (uiState.activeDraft == null && route == Routes.HOME) {
                                         lastWorkoutRoute = null
                                     }
                                     pausedToActualHome = true
-                                    navController.navigate(Routes.HOME) {
+                                    navController.navigate(route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             inclusive = false
                                         }
                                         launchSingleTop = true
                                     }
                                 }
-                                currentRoute != Routes.HOME -> {
-                                    // 1st Home tap from another tab -> resume active workout screen if any
+                                currentRoute != route -> {
+                                    // 1st tap from another tab -> resume active workout/edit screen if any
                                     val resumeTarget = if (!pausedToActualHome) {
                                         lastWorkoutRoute ?: if (uiState.activeDraft != null) Routes.LIVE_SESSION else null
                                     } else {
@@ -363,7 +365,7 @@ fun WorkoutTrackerApp(
                                         }
                                     } else {
                                         pausedToActualHome = false
-                                        navController.navigate(Routes.HOME) {
+                                        navController.navigate(route) {
                                             popUpTo(navController.graph.findStartDestination().id) {
                                                 saveState = true
                                             }
@@ -493,8 +495,8 @@ fun WorkoutTrackerApp(
                                     ) {
                                         MAIN_TABS.forEach { tab ->
                                             val selected = currentRoute == tab.route ||
-                                                (tab.route == Routes.HOME && isWorkoutFlowRoute)
-                                            val showActiveDot = tab.route == Routes.HOME &&
+                                                (tab.route == workoutOwnerTab && isWorkoutFlowRoute)
+                                            val showActiveDot = tab.route == workoutOwnerTab &&
                                                 (uiState.activeDraft != null || lastWorkoutRoute != null)
                                             NavigationBarItem(
                                                 selected = selected,
@@ -553,8 +555,8 @@ fun WorkoutTrackerApp(
                                             Spacer(Modifier.height(8.dp))
                                             MAIN_TABS.forEach { tab ->
                                                 val selected = currentRoute == tab.route ||
-                                                    (tab.route == Routes.HOME && isWorkoutFlowRoute)
-                                                val showActiveDot = tab.route == Routes.HOME &&
+                                                    (tab.route == workoutOwnerTab && isWorkoutFlowRoute)
+                                                val showActiveDot = tab.route == workoutOwnerTab &&
                                                     (uiState.activeDraft != null || lastWorkoutRoute != null)
                                                 NavigationRailItem(
                                                     selected = selected,
@@ -615,6 +617,9 @@ fun WorkoutTrackerApp(
                                                             )
                                                         } else {
                                                             pausedToActualHome = false
+                                                            if (lastWorkoutRoute != Routes.NEW_WORKOUT) {
+                                                                viewModel.resetWizard()
+                                                            }
                                                             navController.navigate(Routes.NEW_WORKOUT)
                                                         }
                                                     },
@@ -650,6 +655,11 @@ fun WorkoutTrackerApp(
                                                 NewWorkoutScreen(
                                                     allSessions = uiState.sessions,
                                                     sessionsForGroups = { viewModel.sessionsMatchingGroups(it) },
+                                                    dateIso = uiState.wizardState.dateIso,
+                                                    selectedGroups = uiState.wizardState.groups,
+                                                    onDateChange = viewModel::setWizardDate,
+                                                    onSelectPreset = viewModel::selectWizardPreset,
+                                                    onToggleGroup = viewModel::toggleWizardGroup,
                                                     onContinue = { dateIso, groups ->
                                                         viewModel.beginSessionFromWizard(dateIso, groups)
                                                         navController.navigate(Routes.LIVE_SESSION) {
@@ -696,17 +706,30 @@ fun WorkoutTrackerApp(
                                                             lastWorkoutRoute = null
                                                             pausedToActualHome = false
                                                             viewModel.discardDraft()
-                                                            if (wasEditing) navController.popBackStack()
-                                                            else navController.popBackStack(Routes.HOME, inclusive = false)
+                                                            val dest = if (wasEditing) Routes.HISTORY else Routes.HOME
+                                                            if (!navController.popBackStack(dest, inclusive = false)) {
+                                                                navController.navigate(dest) {
+                                                                    popUpTo(navController.graph.findStartDestination().id) {
+                                                                        saveState = true
+                                                                    }
+                                                                    launchSingleTop = true
+                                                                    restoreState = true
+                                                                }
+                                                            }
                                                         },
                                                         onFinish = {
                                                             viewModel.finishDraft { wasEditing ->
                                                                 lastWorkoutRoute = null
                                                                 pausedToActualHome = false
-                                                                if (wasEditing) {
-                                                                    navController.popBackStack()
-                                                                } else {
-                                                                    navController.popBackStack(Routes.HOME, inclusive = false)
+                                                                val dest = if (wasEditing) Routes.HISTORY else Routes.HOME
+                                                                if (!navController.popBackStack(dest, inclusive = false)) {
+                                                                    navController.navigate(dest) {
+                                                                        popUpTo(navController.graph.findStartDestination().id) {
+                                                                            saveState = true
+                                                                        }
+                                                                        launchSingleTop = true
+                                                                        restoreState = true
+                                                                    }
                                                                 }
                                                             }
                                                         }
@@ -787,9 +810,7 @@ fun WorkoutTrackerApp(
                                             composable(Routes.LIBRARY) {
                                                 ExerciseLibraryScreen(
                                                     allExercises = uiState.allExercises,
-                                                    lastSessionOf = { viewModel.lastSessionOf(it) },
-                                                    personalRecordKg = { viewModel.personalRecordKg(it) },
-                                                    allSessionsOf = { viewModel.allSessionsOf(it) },
+                                                    sessions = uiState.sessions,
                                                     onOpenDetail = { name -> navController.navigate(Routes.detail(name)) }
                                                 )
                                             }

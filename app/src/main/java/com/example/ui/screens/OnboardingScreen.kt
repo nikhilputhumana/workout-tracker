@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,17 +94,42 @@ fun OnboardingScreen(
         mutableStateOf(initialNextFeeIso.ifBlank { WorkoutMath.isoOffsetMonths(1) })
     }
 
+    BackHandler(enabled = !isEditOnly && step > 1) {
+        step--
+    }
+
     val openDatePicker = rememberDatePickerLauncher(nextFeeIso) { picked ->
         nextFeeIso = picked
     }
 
+    val ageInt = ageText.toIntOrNull()
+    val ageError = if (ageInt == null || ageInt !in 12..100) "Enter 12–100" else null
+    val heightInt = heightText.toIntOrNull()
+    val heightError = if (heightInt == null || heightInt !in 100..240) "Enter 100–240" else null
+    val weightDouble = weightText.toDoubleOrNull()
+    val weightError = if (weightDouble == null || weightDouble !in 25.0..300.0) "Enter 25–300 kg" else null
+    val bfDouble = bfText.toDoubleOrNull()
+    val bfError = if (bfText.isNotBlank() && (bfDouble == null || bfDouble !in 3.0..65.0)) "Enter 3–65%" else null
+    val metricsValid = ageError == null && heightError == null && weightError == null && bfError == null
+
+    fun sanitizeDecimal(input: String): String = buildString {
+        var dotSeen = false
+        for (ch in input) {
+            if (ch.isDigit()) append(ch)
+            else if (ch == '.' && !dotSeen) {
+                dotSeen = true
+                append(ch)
+            }
+        }
+    }.take(6)
+
     fun buildProfile(): UserProfile = UserProfile(
         name = name.trim(),
-        age = ageText.toIntOrNull()?.coerceIn(12, 100) ?: 26,
+        age = ageInt?.coerceIn(12, 100) ?: initialProfile.age.coerceIn(12, 100),
         gender = gender,
-        heightCm = heightText.toIntOrNull()?.coerceIn(100, 240) ?: 175,
-        bodyWeightKg = weightText.toDoubleOrNull()?.coerceIn(25.0, 300.0) ?: 74.5,
-        bodyFatPercent = bfText.toDoubleOrNull()?.coerceIn(3.0, 65.0),
+        heightCm = heightInt?.coerceIn(100, 240) ?: initialProfile.heightCm.coerceIn(100, 240),
+        bodyWeightKg = weightDouble?.coerceIn(25.0, 300.0) ?: initialProfile.bodyWeightKg.coerceIn(25.0, 300.0),
+        bodyFatPercent = if (bfText.isBlank()) null else bfDouble?.coerceIn(3.0, 65.0),
         experienceLevel = level,
         preferredSplit = split,
         weeklyTargetSessions = initialProfile.weeklyTargetSessions,
@@ -269,6 +295,8 @@ fun OnboardingScreen(
                             value = ageText,
                             onValueChange = { ageText = it.filter { c -> c.isDigit() }.take(3) },
                             label = { Text("Age") },
+                            isError = ageError != null,
+                            supportingText = ageError?.let { msg -> { Text(msg) } },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             colors = fieldColors,
@@ -280,6 +308,8 @@ fun OnboardingScreen(
                             value = heightText,
                             onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
                             label = { Text("Height (cm)") },
+                            isError = heightError != null,
+                            supportingText = heightError?.let { msg -> { Text(msg) } },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             colors = fieldColors,
@@ -292,8 +322,10 @@ fun OnboardingScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
                             value = weightText,
-                            onValueChange = { weightText = it },
+                            onValueChange = { weightText = sanitizeDecimal(it) },
                             label = { Text("Body weight (kg)") },
+                            isError = weightError != null,
+                            supportingText = weightError?.let { msg -> { Text(msg) } },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = fieldColors,
@@ -303,8 +335,10 @@ fun OnboardingScreen(
                         )
                         OutlinedTextField(
                             value = bfText,
-                            onValueChange = { bfText = it },
+                            onValueChange = { bfText = sanitizeDecimal(it) },
                             label = { Text("Body fat % (opt)") },
+                            isError = bfError != null,
+                            supportingText = bfError?.let { msg -> { Text(msg) } },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             colors = fieldColors,
@@ -476,6 +510,7 @@ fun OnboardingScreen(
                     }
                     Button(
                         onClick = { onComplete(buildProfile(), nextFeeIso) },
+                        enabled = metricsValid,
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
                         modifier = Modifier
@@ -501,6 +536,7 @@ fun OnboardingScreen(
                             if (step < 3) step++
                             else onComplete(buildProfile(), nextFeeIso)
                         },
+                        enabled = step != 2 || metricsValid,
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
                         modifier = Modifier

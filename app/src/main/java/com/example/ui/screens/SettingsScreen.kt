@@ -128,10 +128,27 @@ fun SettingsScreen(
         mutableIntStateOf(profile.weeklyTargetSessions.coerceIn(1, 7))
     }
 
-    val parsedAmount = amountText.toDoubleOrNull() ?: uiState.gymFee.amount
-    val parsedWaist = waistText.toDoubleOrNull() ?: uiState.measurements.waistCm
-    val parsedChest = chestText.toDoubleOrNull() ?: uiState.measurements.chestCm
-    val parsedArm = armText.toDoubleOrNull() ?: uiState.measurements.armCm
+    val parsedAmount = amountText.toDoubleOrNull()
+    val parsedWaist = waistText.toDoubleOrNull()
+    val parsedChest = chestText.toDoubleOrNull()
+    val parsedArm = armText.toDoubleOrNull()
+
+    val amountError = if (parsedAmount == null || parsedAmount <= 0.0 || parsedAmount > 1_000_000.0) "Enter > 0" else null
+    val waistError = if (parsedWaist == null || parsedWaist !in 30.0..250.0) "30–250" else null
+    val chestError = if (parsedChest == null || parsedChest !in 40.0..250.0) "40–250" else null
+    val armError = if (parsedArm == null || parsedArm !in 15.0..100.0) "15–100" else null
+    val allInputsValid = amountError == null && waistError == null && chestError == null && armError == null
+
+    fun sanitizeDecimal(input: String): String = buildString {
+        var dotSeen = false
+        for (ch in input) {
+            if (ch.isDigit()) append(ch)
+            else if (ch == '.' && !dotSeen) {
+                dotSeen = true
+                append(ch)
+            }
+        }
+    }.take(7)
 
     val hasUnsavedChanges =
         lastPaidIso != uiState.gymFee.lastPaidIso ||
@@ -170,7 +187,8 @@ fun SettingsScreen(
 
     val bwLog = uiState.bodyWeightLog
     val latestBw = bwLog.lastOrNull()?.weightKg ?: profile.bodyWeightKg
-    val bwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
+    val rawBwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
+    val bwDelta = if (kotlin.math.abs(rawBwDelta) < 0.05) 0.0 else rawBwDelta
     val heightM = (profile.heightCm / 100.0).coerceAtLeast(1.0)
     val bmi = latestBw / heightM.pow(2.0)
 
@@ -184,13 +202,18 @@ fun SettingsScreen(
     )
 
     fun commitSave() {
+        val validAmount = parsedAmount ?: return
+        val validWaist = parsedWaist ?: return
+        val validChest = parsedChest ?: return
+        val validArm = parsedArm ?: return
+        if (!allInputsValid) return
         onSaveSettingsChanges(
             lastPaidIso,
             nextDueIso,
-            parsedAmount,
-            parsedWaist,
-            parsedChest,
-            parsedArm,
+            validAmount,
+            validWaist,
+            validChest,
+            validArm,
             weeklyTarget
         )
     }
@@ -246,7 +269,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(4.dp),
                             border = BorderStroke(1.dp, palette.borderStrong),
                             modifier = Modifier
-                                .heightIn(min = 44.dp)
+                                .heightIn(min = 48.dp)
                                 .testTag("settings_edit_profile_button")
                         ) {
                             Text("Edit", color = palette.text2)
@@ -298,7 +321,7 @@ fun SettingsScreen(
                                     color = palette.appBg,
                                     border = BorderStroke(1.dp, palette.borderStrong),
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(48.dp)
                                         .clip(RoundedCornerShape(6.dp))
                                         .clickable(enabled = weeklyTarget > 1) {
                                             weeklyTarget = (weeklyTarget - 1).coerceIn(1, 7)
@@ -324,7 +347,7 @@ fun SettingsScreen(
                                     color = palette.appBg,
                                     border = BorderStroke(1.dp, palette.borderStrong),
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(48.dp)
                                         .clip(RoundedCornerShape(6.dp))
                                         .clickable(enabled = weeklyTarget < 7) {
                                             weeklyTarget = (weeklyTarget + 1).coerceIn(1, 7)
@@ -394,14 +417,16 @@ fun SettingsScreen(
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                verticalAlignment = Alignment.Bottom
+                                verticalAlignment = Alignment.Top
                             ) {
                                 OutlinedTextField(
                                     value = amountText,
-                                    onValueChange = { amountText = it },
+                                    onValueChange = { amountText = sanitizeDecimal(it) },
                                     label = { Text("Amount (₹)") },
+                                    isError = amountError != null,
+                                    supportingText = amountError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = fieldColors,
                                     modifier = Modifier
                                         .weight(1f)
@@ -415,6 +440,7 @@ fun SettingsScreen(
                                         contentColor = palette.brandInk
                                     ),
                                     modifier = Modifier
+                                        .padding(top = 4.dp)
                                         .heightIn(min = 52.dp)
                                         .testTag("settings_mark_paid_button")
                                 ) {
@@ -422,8 +448,9 @@ fun SettingsScreen(
                                 }
                             }
 
+                            val summaryAmt = parsedAmount ?: uiState.gymFee.amount
                             Text(
-                                text = "Last paid ${WorkoutMath.formatShort(lastPaidIso)} · ₹${WorkoutMath.formatKg(parsedAmount)} · next due ${WorkoutMath.formatShort(nextDueIso)}",
+                                text = "Last paid ${WorkoutMath.formatShort(lastPaidIso)} · ₹${WorkoutMath.formatKg(summaryAmt)} · next due ${WorkoutMath.formatShort(nextDueIso)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = palette.muted
                             )
@@ -487,36 +514,48 @@ fun SettingsScreen(
                             ) {
                                 OutlinedTextField(
                                     value = waistText,
-                                    onValueChange = { waistText = it },
+                                    onValueChange = { waistText = sanitizeDecimal(it) },
                                     label = { Text("Waist") },
+                                    isError = waistError != null,
+                                    supportingText = waistError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = fieldColors,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_waist_input")
                                 )
                                 OutlinedTextField(
                                     value = chestText,
-                                    onValueChange = { chestText = it },
+                                    onValueChange = { chestText = sanitizeDecimal(it) },
                                     label = { Text("Chest") },
+                                    isError = chestError != null,
+                                    supportingText = chestError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = fieldColors,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_chest_input")
                                 )
                                 OutlinedTextField(
                                     value = armText,
-                                    onValueChange = { armText = it },
+                                    onValueChange = { armText = sanitizeDecimal(it) },
                                     label = { Text("Arm") },
+                                    isError = armError != null,
+                                    supportingText = armError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                                     colors = fieldColors,
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_arm_input")
                                 )
                             }
 
                             Button(
                                 onClick = { commitSave() },
-                                enabled = hasUnsavedChanges,
+                                enabled = hasUnsavedChanges && allInputsValid,
                                 shape = RoundedCornerShape(6.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = palette.brand,
@@ -536,7 +575,11 @@ fun SettingsScreen(
                                 )
                                 Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = if (hasUnsavedChanges) "Save changes" else "All settings saved",
+                                    text = when {
+                                        !allInputsValid -> "Fix invalid numbers"
+                                        hasUnsavedChanges -> "Save changes"
+                                        else -> "All settings saved"
+                                    },
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -687,7 +730,7 @@ fun SettingsScreen(
                                 border = BorderStroke(1.dp, palette.redInk.copy(alpha = 0.5f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .heightIn(min = 46.dp)
+                                    .heightIn(min = 48.dp)
                                     .testTag("settings_clear_data_button")
                             ) {
                                 Text("Clear workout history", fontSize = 13.sp, color = palette.redInk)
@@ -735,7 +778,7 @@ fun SettingsScreen(
                                         ),
                                         modifier = Modifier
                                             .weight(1f)
-                                            .heightIn(min = 46.dp)
+                                            .heightIn(min = 48.dp)
                                             .clip(RoundedCornerShape(6.dp))
                                             .clickable { onSetAppearance(mode) }
                                             .testTag("settings_theme_${mode.name.lowercase()}")
@@ -794,10 +837,10 @@ fun SettingsScreen(
             item { Spacer(Modifier.height(8.dp)) }
         }
 
-        if (hasUnsavedChanges) {
+        if (hasUnsavedChanges || !allInputsValid) {
             Surface(
                 color = palette.surface,
-                border = BorderStroke(1.dp, palette.brandBd)
+                border = BorderStroke(1.dp, if (allInputsValid) palette.brandBd else palette.redInk.copy(alpha = 0.5f))
             ) {
                 Row(
                     modifier = Modifier
@@ -807,18 +850,19 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = "You have unsaved settings changes",
+                        text = if (!allInputsValid) "Fix invalid numbers before saving" else "You have unsaved settings changes",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
-                        color = palette.brandInk,
+                        color = if (!allInputsValid) palette.redInk else palette.brandInk,
                         modifier = Modifier.weight(1f)
                     )
                     Button(
                         onClick = { commitSave() },
+                        enabled = allInputsValid,
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
                         modifier = Modifier
-                            .heightIn(min = 46.dp)
+                            .heightIn(min = 48.dp)
                             .testTag("settings_sticky_save_button")
                     ) {
                         Text("Save", color = Color.White, fontWeight = FontWeight.SemiBold)
@@ -874,7 +918,7 @@ private fun DateFieldCard(
             border = BorderStroke(1.dp, palette.borderStrong),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 46.dp)
+                .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .clickable(onClick = onClick)
         ) {
@@ -951,19 +995,25 @@ private fun ProgressPhotoSlotBox(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(24.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable(onClick = onRemove),
-                contentAlignment = Alignment.Center
+                    .size(48.dp)
+                    .clickable(onClick = onRemove)
+                    .padding(6.dp),
+                contentAlignment = Alignment.TopEnd
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "Remove $label photo",
-                    tint = Color.White,
-                    modifier = Modifier.size(14.dp)
-                )
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.65f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Remove $label photo",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
             Box(
                 modifier = Modifier

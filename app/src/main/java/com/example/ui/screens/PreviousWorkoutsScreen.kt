@@ -101,13 +101,13 @@ fun PreviousWorkoutsScreen(
                             if (isSelected) palette.brand else palette.borderStrong
                         ),
                         modifier = Modifier
-                            .heightIn(min = 36.dp)
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { selectedFilter = grp }
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 text = grp ?: "All selected",
@@ -198,7 +198,7 @@ fun PreviousWorkoutsScreen(
                                         shape = RoundedCornerShape(6.dp),
                                         color = palette.subtle,
                                         modifier = Modifier
-                                            .heightIn(min = 38.dp)
+                                            .heightIn(min = 48.dp)
                                             .clip(RoundedCornerShape(6.dp))
                                             .clickable { onAddExerciseToDraft(ex.name) }
                                             .testTag("prev_add_${ex.name.lowercase().replace(' ', '_')}")

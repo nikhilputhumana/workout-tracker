@@ -81,30 +81,36 @@ fun HomeScreen(
         WorkoutMath.clubSessionsByDate(uiState.sessions)
     }
 
-    // Rolling 7-day volume bars (6 weeks)
-    val bars = (5 downTo 0).map { weekBack ->
-        val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
-        val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
-        val vol = clubbedSessions
-            .map { it.session }
-            .filter { it.dateIso in startIso..endIso }
-            .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
-        VolumeBarPoint(
-            label = WorkoutMath.shortWeekBucketLabel(startIso),
-            topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
-            value = vol.toFloat(),
-            isHighlighted = weekBack == 0
-        )
+    // Rolling 7-day volume bars (6 weeks), memoized across timer ticks
+    val bars = remember(clubbedSessions, uiState.allExercises, todayIso) {
+        (5 downTo 0).map { weekBack ->
+            val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
+            val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
+            val vol = clubbedSessions
+                .map { it.session }
+                .filter { it.dateIso in startIso..endIso }
+                .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
+            VolumeBarPoint(
+                label = WorkoutMath.shortWeekBucketLabel(startIso),
+                topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
+                value = vol.toFloat(),
+                isHighlighted = weekBack == 0
+            )
+        }
     }
 
-    val win7Start = WorkoutMath.isoOffsetDays(-6, todayIso)
-    val inLast7 = clubbedSessions.map { it.session }.filter { it.dateIso >= win7Start }
+    val win7Start = remember(todayIso) { WorkoutMath.isoOffsetDays(-6, todayIso) }
+    val inLast7 = remember(clubbedSessions, win7Start) {
+        clubbedSessions.map { it.session }.filter { it.dateIso >= win7Start }
+    }
     val weeklyTarget = uiState.profile.weeklyTargetSessions.coerceIn(1, 7)
     val thisWeekVol = bars.last().value.toDouble()
     val prevWeekVol = bars.getOrNull(bars.lastIndex - 1)?.value?.toDouble() ?: 0.0
     val volDiff = thisWeekVol - prevWeekVol
-    val wkKcal = inLast7.sumOf {
-        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+    val wkKcal = remember(inLast7, uiState.profile.bodyWeightKg, uiState.allExercises) {
+        inLast7.sumOf {
+            WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+        }
     }
 
     val latestSession = clubbedSessions.firstOrNull()?.session
@@ -403,7 +409,9 @@ fun HomeScreen(
                         TextButton(
                             onClick = onOpenStats,
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier = Modifier.testTag("home_stats_link")
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("home_stats_link")
                         ) {
                             Text(
                                 text = "Stats",
@@ -476,7 +484,9 @@ fun HomeScreen(
                 if (clubbedSessions.isNotEmpty()) {
                     TextButton(
                         onClick = { onOpenHistory(null) },
-                        modifier = Modifier.testTag("home_view_all_history_button")
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .testTag("home_view_all_history_button")
                     ) {
                         Text(
                             text = "View all",
@@ -525,7 +535,7 @@ fun HomeScreen(
                 SessionSummaryCard(
                     session = session,
                     bodyWeightKg = uiState.profile.bodyWeightKg,
-                    prCount = countSessionPrs(session, uiState.sessions),
+                    prCount = countSessionPrs(session, uiState.sessions, uiState.allExercises),
                     allExercises = uiState.allExercises,
                     onClick = { onOpenHistory(session.id) },
                     modifier = Modifier.testTag("home_recent_session_${session.id}")

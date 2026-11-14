@@ -163,17 +163,24 @@ class PreferencesRepository(private val context: Context) {
         withContext(Dispatchers.IO) {
             val dir = File(context.filesDir, "progress_photos").apply { mkdirs() }
             val dest = File(dir, "${slot.name.lowercase()}_${System.currentTimeMillis()}.jpg")
-            dir.listFiles()?.filter { it.name.startsWith("${slot.name.lowercase()}_") }
+
+            val copied = runCatching {
+                context.contentResolver.openInputStream(sourceUri)?.use { input ->
+                    dest.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                    true
+                } ?: false
+            }.getOrDefault(false)
+
+            if (!copied || !dest.exists() || dest.length() == 0L) {
+                dest.delete()
+                return@withContext null
+            }
+
+            dir.listFiles()
+                ?.filter { it.name.startsWith("${slot.name.lowercase()}_") && it.absolutePath != dest.absolutePath }
                 ?.forEach { it.delete() }
-
-            val copied = context.contentResolver.openInputStream(sourceUri)?.use { input ->
-                dest.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-                true
-            } ?: false
-
-            if (!copied) return@withContext null
 
             context.dataStore.edit { prefs ->
                 when (slot) {

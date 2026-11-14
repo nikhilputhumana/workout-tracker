@@ -37,6 +37,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,11 +76,19 @@ fun HistoryScreen(
 ) {
     val palette = LocalWorkoutPalette.current
     var selectedFilter by remember { mutableStateOf("All") }
-    var expandedDates by remember(initialExpandedId, sessions) {
+    var expandedDates by remember(initialExpandedId) {
         val targetDate = initialExpandedId?.let { id ->
             sessions.firstOrNull { it.id == id }?.dateIso
         }
         mutableStateOf(if (targetDate != null) setOf(targetDate) else emptySet())
+    }
+    LaunchedEffect(initialExpandedId, sessions) {
+        if (initialExpandedId != null) {
+            val targetDate = sessions.firstOrNull { it.id == initialExpandedId }?.dateIso
+            if (targetDate != null && targetDate !in expandedDates) {
+                expandedDates = expandedDates + targetDate
+            }
+        }
     }
     var pendingDeleteIds by remember { mutableStateOf<List<Long>?>(null) }
 
@@ -116,7 +125,7 @@ fun HistoryScreen(
                             if (selected) palette.brand else palette.borderStrong
                         ),
                         modifier = Modifier
-                            .heightIn(min = 38.dp)
+                            .heightIn(min = 48.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { selectedFilter = chip }
                             .testTag("history_filter_${chip.lowercase()}")
@@ -169,7 +178,7 @@ fun HistoryScreen(
                 val session = club.session
                 val sourceIds = club.sourceIds
                 val isOpen = session.dateIso in expandedDates
-                val prCount = countSessionPrs(session, sessions)
+                val prCount = countSessionPrs(session, sessions, allExercises)
                 val vol = WorkoutMath.sessionVolume(session, allExercises)
                 val sets = WorkoutMath.sessionSets(session)
                 val kcal = WorkoutMath.estimateSessionCalories(session, bodyWeightKg, allExercises)
@@ -218,7 +227,7 @@ fun HistoryScreen(
                                 IconButton(
                                     onClick = { onEditSession(session, sourceIds) },
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(48.dp)
                                         .testTag("history_edit_icon_${session.id}")
                                 ) {
                                     Icon(
@@ -231,7 +240,7 @@ fun HistoryScreen(
                                 IconButton(
                                     onClick = { pendingDeleteIds = sourceIds },
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(48.dp)
                                         .testTag("history_delete_icon_${session.id}")
                                 ) {
                                     Icon(
