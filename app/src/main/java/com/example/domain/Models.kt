@@ -24,7 +24,8 @@ data class UserProfile(
     val bodyWeightKg: Double = 74.5,
     val bodyFatPercent: Double? = null,
     val experienceLevel: String = "Intermediate",
-    val preferredSplit: String = "Push",
+    val preferredSplit: String = "Push / Pull / Legs (PPL)",
+    val weeklyTargetSessions: Int = 4,
     val onboardingComplete: Boolean = false
 )
 
@@ -110,7 +111,18 @@ data class ActiveDraft(
     val groups: List<String>,
     val exercises: List<DraftExercise> = emptyList(),
     val sessionNote: String = "",
-    val elapsedSeconds: Int = 0
+    val elapsedSeconds: Int = 0,
+    val editingSessionIds: List<Long> = emptyList(),
+    val manualDurationMinutes: Int? = null
+)
+
+enum class ToastTone {
+    SUCCESS, WARNING, INFO
+}
+
+data class ToastBanner(
+    val message: String,
+    val tone: ToastTone = ToastTone.SUCCESS
 )
 
 data class OfflineExerciseMatch(

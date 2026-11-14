@@ -46,7 +46,8 @@ data class BackupProfileDto(
     val weight: Double,
     val bf: Double? = null,
     val level: String = "Intermediate",
-    val split: String = "Push"
+    val split: String = "Push / Pull / Legs (PPL)",
+    val weeklyTarget: Int = 4
 )
 
 @JsonClass(generateAdapter = true)
@@ -117,7 +118,8 @@ class BackupManager {
                 weight = profile.bodyWeightKg,
                 bf = profile.bodyFatPercent,
                 level = profile.experienceLevel,
-                split = profile.preferredSplit
+                split = profile.preferredSplit,
+                weeklyTarget = profile.weeklyTargetSessions
             ),
             measures = BackupMeasuresDto(
                 waist = measures.waistCm,

@@ -36,6 +36,7 @@ class PreferencesRepository(private val context: Context) {
         val HAS_BODY_FAT = booleanPreferencesKey("profile_has_body_fat")
         val EXPERIENCE = stringPreferencesKey("profile_experience")
         val SPLIT = stringPreferencesKey("profile_split")
+        val WEEKLY_TARGET = intPreferencesKey("profile_weekly_target")
         val ONBOARDED = booleanPreferencesKey("onboarding_complete")
 
         val WAIST_CM = doublePreferencesKey("measure_waist_cm")
@@ -62,7 +63,8 @@ class PreferencesRepository(private val context: Context) {
             bodyWeightKg = prefs[Keys.WEIGHT_KG] ?: 74.5,
             bodyFatPercent = if (hasBf) prefs[Keys.BODY_FAT] else null,
             experienceLevel = prefs[Keys.EXPERIENCE] ?: "Intermediate",
-            preferredSplit = prefs[Keys.SPLIT] ?: "Push",
+            preferredSplit = prefs[Keys.SPLIT] ?: "Push / Pull / Legs (PPL)",
+            weeklyTargetSessions = (prefs[Keys.WEEKLY_TARGET] ?: 4).coerceIn(1, 7),
             onboardingComplete = prefs[Keys.ONBOARDED] ?: false
         )
     }
@@ -109,6 +111,7 @@ class PreferencesRepository(private val context: Context) {
             }
             prefs[Keys.EXPERIENCE] = profile.experienceLevel
             prefs[Keys.SPLIT] = profile.preferredSplit
+            prefs[Keys.WEEKLY_TARGET] = profile.weeklyTargetSessions.coerceIn(1, 7)
             prefs[Keys.ONBOARDED] = profile.onboardingComplete
         }
     }

@@ -23,6 +23,8 @@ import com.example.domain.LoggedExercise
 import com.example.domain.PhotoSlot
 import com.example.domain.RpeRating
 import com.example.domain.SplitPreset
+import com.example.domain.ToastBanner
+import com.example.domain.ToastTone
 import com.example.domain.UserProfile
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
@@ -39,6 +41,7 @@ import java.util.UUID
 
 data class MainUiState(
     val isLoaded: Boolean = false,
+    val showLaunchSplash: Boolean = true,
     val profile: UserProfile = UserProfile(),
     val measurements: BodyMeasurements = BodyMeasurements(),
     val gymFee: GymFeeRecord = GymFeeRecord(),
@@ -49,7 +52,7 @@ data class MainUiState(
     val allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
     val activeDraft: ActiveDraft? = null,
     val aiLookupState: AiLookupState = AiLookupState.Idle,
-    val toastMessage: String? = null
+    val toastBanner: ToastBanner? = null
 )
 
 class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(application) {
@@ -61,7 +64,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     private val _activeDraft = MutableStateFlow<ActiveDraft?>(null)
     private val _aiState = MutableStateFlow<AiLookupState>(AiLookupState.Idle)
-    private val _toast = MutableStateFlow<String?>(null)
+    private val _toast = MutableStateFlow<ToastBanner?>(null)
+    private val _showLaunchSplash = MutableStateFlow(true)
 
     private var timerJob: Job? = null
     private var toastJob: Job? = null
@@ -84,8 +88,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         },
         _activeDraft,
         _aiState,
-        _toast
-    ) { prefsList, dbTriple, draft, aiState, toast ->
+        combine(_toast, _showLaunchSplash) { toast, splash -> toast to splash }
+    ) { prefsList, dbTriple, draft, aiState, toastSplash ->
         val profile = prefsList[0] as UserProfile
         val measures = prefsList[1] as BodyMeasurements
         val fee = prefsList[2] as GymFeeRecord
@@ -93,6 +97,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         val (sessions, bw, custom) = dbTriple
         MainUiState(
             isLoaded = true,
+            showLaunchSplash = toastSplash.second,
             profile = profile,
             measurements = measures,
             gymFee = fee,
@@ -103,19 +108,23 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             allExercises = ExerciseCatalog.BUILT_IN_EXERCISES + custom,
             activeDraft = draft,
             aiLookupState = aiState,
-            toastMessage = toast
+            toastBanner = toastSplash.first
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = MainUiState(isLoaded = false)
+        initialValue = MainUiState(isLoaded = false, showLaunchSplash = true)
     )
 
-    fun showToast(message: String) {
+    fun dismissLaunchSplash() {
+        _showLaunchSplash.value = false
+    }
+
+    fun showToast(message: String, tone: ToastTone = ToastTone.SUCCESS) {
         toastJob?.cancel()
-        _toast.value = message
+        _toast.value = ToastBanner(message, tone)
         toastJob = viewModelScope.launch {
-            delay(2_600)
+            delay(3_200)
             _toast.value = null
         }
     }
@@ -129,8 +138,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun completeOnboarding(
         profile: UserProfile,
-        nextFeeDueIso: String,
-        loadSampleData: Boolean
+        nextFeeDueIso: String
     ) {
         viewModelScope.launch {
             val savedProfile = profile.copy(
@@ -142,14 +150,34 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
                 val currentFee = uiState.value.gymFee
                 repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
             }
-            if (loadSampleData) {
-                repository.seedSampleData()
-                showToast("Setup complete · Sample workouts loaded")
-            } else {
-                if (uiState.value.bodyWeightLog.isEmpty() && savedProfile.bodyWeightKg > 0) {
-                    repository.logBodyWeight(savedProfile.bodyWeightKg)
+            if (uiState.value.bodyWeightLog.isEmpty() && savedProfile.bodyWeightKg > 0) {
+                repository.logBodyWeight(savedProfile.bodyWeightKg)
+            }
+            showToast("You are set up! Tap Create workout to begin.")
+        }
+    }
+
+    fun importBackupDuringOnboarding(
+        json: String,
+        pendingProfile: UserProfile,
+        nextFeeDueIso: String
+    ) {
+        viewModelScope.launch {
+            runCatching {
+                val savedProfile = pendingProfile.copy(
+                    name = pendingProfile.name.ifBlank { "Athlete" },
+                    onboardingComplete = true
+                )
+                repository.saveProfile(savedProfile)
+                if (nextFeeDueIso.isNotBlank()) {
+                    val currentFee = uiState.value.gymFee
+                    repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
                 }
-                showToast("You are set up. Tap Create workout to begin.")
+                repository.importBackupJson(json)
+            }.onSuccess { count ->
+                showToast("Imported $count workouts successfully")
+            }.onFailure { err ->
+                showToast(err.message ?: "That file is not a Workout Tracker backup", ToastTone.WARNING)
             }
         }
     }
@@ -175,33 +203,41 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun saveGymFee(lastPaidIso: String, nextDueIso: String, amount: Double) {
+    fun saveSettingsChanges(
+        lastPaidIso: String,
+        nextDueIso: String,
+        amount: Double,
+        waistCm: Double,
+        chestCm: Double,
+        armCm: Double,
+        weeklyTargetSessions: Int
+    ) {
         viewModelScope.launch {
             repository.saveGymFee(GymFeeRecord(lastPaidIso, nextDueIso, amount))
+            repository.saveMeasurements(waistCm, chestCm, armCm)
+            val updatedProfile = uiState.value.profile.copy(
+                weeklyTargetSessions = weeklyTargetSessions.coerceIn(1, 7)
+            )
+            repository.saveProfile(updatedProfile)
+            showToast("Settings saved successfully")
         }
     }
 
     fun markFeePaidToday() {
         viewModelScope.launch {
             repository.markFeePaidToday()
-            showToast("Fee marked paid for today")
+            showToast("Gym fee marked paid for today")
         }
     }
 
     fun logBodyWeight(weightKg: Double) {
         if (weightKg <= 0.0) {
-            showToast("Enter a valid weight")
+            showToast("Enter a valid weight", ToastTone.WARNING)
             return
         }
         viewModelScope.launch {
             repository.logBodyWeight(weightKg)
             showToast("Body weight logged (${WorkoutMath.formatKg(weightKg)} kg)")
-        }
-    }
-
-    fun saveMeasurements(waistCm: Double, chestCm: Double, armCm: Double) {
-        viewModelScope.launch {
-            repository.saveMeasurements(waistCm, chestCm, armCm)
         }
     }
 
@@ -211,7 +247,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             if (path != null) {
                 showToast("${slot.label} progress photo saved locally")
             } else {
-                showToast("Could not read selected image")
+                showToast("Could not read selected image", ToastTone.WARNING)
             }
         }
     }
@@ -219,21 +255,14 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     fun clearProgressPhoto(slot: PhotoSlot) {
         viewModelScope.launch {
             repository.clearProgressPhoto(slot)
-            showToast("${slot.label} photo removed")
-        }
-    }
-
-    fun loadSampleWorkouts() {
-        viewModelScope.launch {
-            repository.seedSampleData()
-            showToast("10 sample workouts loaded")
+            showToast("${slot.label} photo removed", ToastTone.INFO)
         }
     }
 
     fun clearAllWorkouts() {
         viewModelScope.launch {
             repository.clearAllWorkoutsAndWeights()
-            showToast("All workout history cleared")
+            showToast("All workout history cleared", ToastTone.WARNING)
         }
     }
 
@@ -254,41 +283,88 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             runCatching {
                 repository.importBackupJson(json)
             }.onSuccess { count ->
-                showToast("Imported $count workouts")
+                showToast("Imported $count workouts successfully")
             }.onFailure { err ->
-                showToast(err.message ?: "That file is not a Workout Tracker backup")
+                showToast(err.message ?: "That file is not a Workout Tracker backup", ToastTone.WARNING)
             }
         }
     }
 
-    fun deleteSession(sessionId: Long) {
+    fun deleteSessions(sessionIds: List<Long>) {
         viewModelScope.launch {
-            repository.deleteSession(sessionId)
-            showToast("Workout deleted")
+            repository.deleteSessions(sessionIds)
+            showToast("Workout deleted", ToastTone.WARNING)
         }
     }
 
-    // ── Live Draft & Timer ──
+    // ── Live Draft, Edit History & Timer ──
 
     fun startNewDraft(dateIso: String = WorkoutMath.todayIso(), groups: List<String> = emptyList()) {
+        timerJob?.cancel()
         _activeDraft.value = ActiveDraft(
             dateIso = dateIso,
             groups = groups,
             exercises = emptyList(),
             sessionNote = "",
-            elapsedSeconds = 0
+            elapsedSeconds = 0,
+            editingSessionIds = emptyList(),
+            manualDurationMinutes = null
         )
         startTimerIfNeeded()
     }
 
     fun beginSessionFromWizard(dateIso: String, groups: List<String>) {
         val current = _activeDraft.value
-        _activeDraft.value = if (current == null) {
+        _activeDraft.value = if (current == null || current.editingSessionIds.isNotEmpty()) {
             ActiveDraft(dateIso = dateIso, groups = groups)
         } else {
             current.copy(dateIso = dateIso, groups = groups)
         }
         startTimerIfNeeded()
+    }
+
+    fun startEditingSession(session: WorkoutSession, sourceIds: List<Long>) {
+        timerJob?.cancel()
+        val draftExercises = session.exercises.map { ex ->
+            DraftExercise(
+                localId = UUID.randomUUID().toString(),
+                name = ex.name,
+                equipment = ex.equipment,
+                sets = ex.sets.map { st ->
+                    DraftSet(
+                        repsText = st.reps.toString(),
+                        weightText = if (st.weightKg == 0.0) "0" else WorkoutMath.formatKg(st.weightKg),
+                        isCompleted = st.isCompleted
+                    )
+                }.ifEmpty { listOf(DraftSet("10", "0", false)) },
+                rpe = ex.rpe,
+                note = ex.note
+            )
+        }
+        _activeDraft.value = ActiveDraft(
+            dateIso = session.dateIso,
+            groups = session.groups,
+            exercises = draftExercises,
+            sessionNote = session.note,
+            elapsedSeconds = session.durationMinutes * 60,
+            editingSessionIds = sourceIds.ifEmpty { listOf(session.id) },
+            manualDurationMinutes = session.durationMinutes
+        )
+    }
+
+    fun updateDraftDate(dateIso: String) {
+        _activeDraft.update { it?.copy(dateIso = dateIso) }
+    }
+
+    fun updateDraftManualDuration(minsText: String) {
+        val digits = minsText.filter { it.isDigit() }.take(3)
+        val parsed = if (digits.isEmpty()) 0 else digits.toIntOrNull()?.coerceIn(0, 600) ?: 0
+        _activeDraft.update { d ->
+            d?.copy(
+                manualDurationMinutes = parsed,
+                elapsedSeconds = parsed * 60
+            )
+        }
     }
 
     private fun startTimerIfNeeded() {
@@ -297,7 +373,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             while (true) {
                 delay(1_000)
                 val draft = _activeDraft.value
-                if (draft == null) {
+                if (draft == null || draft.editingSessionIds.isNotEmpty()) {
                     break
                 }
                 _activeDraft.value = draft.copy(elapsedSeconds = draft.elapsedSeconds + 1)
@@ -317,26 +393,36 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         }
 
         if (current.exercises.any { it.name.equals(exerciseName, ignoreCase = true) }) {
-            showToast("$exerciseName is already in this workout")
+            showToast("$exerciseName is already in this workout", ToastTone.WARNING)
             return
         }
 
         val def = ExerciseCatalog.findByName(exerciseName, st.customExercises)
         val equipment = explicitEquipment ?: def?.equipment ?: "Machine"
-        val isBodyweight = def?.isBodyweight == true
+        val isCardio = ExerciseCatalog.isCardioExercise(exerciseName, st.allExercises)
+        val isBodyweight = !isCardio && def?.isBodyweight == true
         val last = lastSessionOf(exerciseName)
 
         val initialSets = if (last != null && last.second.sets.isNotEmpty()) {
             val prevEx = last.second
-            val bump = if (prevEx.rpe == RpeRating.EASY && !isBodyweight) 2.5 else 0.0
+            val bump = if (!isCardio && prevEx.rpe == RpeRating.EASY && !isBodyweight) 2.5 else 0.0
             prevEx.sets.map { s ->
-                val targetKg = if (isBodyweight) 0.0 else (s.weightKg + bump)
+                val targetVal = if (isBodyweight) 0.0 else (s.weightKg + bump)
                 DraftSet(
                     repsText = s.reps.toString(),
-                    weightText = if (isBodyweight) "0" else WorkoutMath.formatKg(targetKg),
+                    weightText = if (isBodyweight) "0" else WorkoutMath.formatKg(targetVal),
                     isCompleted = false
                 )
             }
+        } else if (isCardio) {
+            val isWalk = exerciseName.contains("walk", ignoreCase = true)
+            listOf(
+                DraftSet(
+                    repsText = if (isWalk) "30" else "20",
+                    weightText = if (isWalk) "2.5" else "3",
+                    isCompleted = false
+                )
+            )
         } else {
             listOf(
                 DraftSet(
@@ -446,11 +532,12 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         val nowDone = !set.isCompleted
         updateSet(localId, setIndex) { it.copy(isCompleted = nowDone) }
 
-        if (nowDone) {
+        val isCardio = ExerciseCatalog.isCardioExercise(ex.name, uiState.value.allExercises)
+        if (nowDone && !isCardio) {
             val weight = set.weightText.toDoubleOrNull() ?: 0.0
             val prevPr = personalRecordKg(ex.name)
             if (prevPr > 0.0 && weight > prevPr) {
-                showToast("Personal record on ${ex.name} · ${WorkoutMath.formatKg(weight)} kg")
+                showToast("Personal record on ${ex.name} · ${WorkoutMath.formatKg(weight)} kg!")
             }
         }
     }
@@ -496,24 +583,33 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun discardDraft() {
+        val wasEditing = _activeDraft.value?.editingSessionIds?.isNotEmpty() == true
         timerJob?.cancel()
         _activeDraft.value = null
-        showToast("Draft discarded")
+        showToast(if (wasEditing) "Edit cancelled" else "Draft discarded", ToastTone.INFO)
     }
 
-    fun finishDraft(onSaved: () -> Unit) {
+    fun finishDraft(onSaved: (wasEditing: Boolean) -> Unit) {
         val draft = _activeDraft.value ?: return
         if (draft.exercises.isEmpty()) {
-            showToast("Add at least one exercise before finishing")
+            showToast("Add at least one exercise before saving", ToastTone.WARNING)
             return
         }
+        val wasEditing = draft.editingSessionIds.isNotEmpty()
         viewModelScope.launch {
+            val allEx = uiState.value.allExercises
+            val vol = WorkoutMath.draftVolume(draft, allEx)
+            val kcal = WorkoutMath.estimateDraftCalories(draft, uiState.value.profile.bodyWeightKg, allEx)
             repository.saveCompletedDraft(draft)
-            val vol = WorkoutMath.draftVolume(draft)
             timerJob?.cancel()
             _activeDraft.value = null
-            showToast("Workout saved · ${WorkoutMath.formatVolume(vol)} lifted")
-            onSaved()
+            val msg = when {
+                wasEditing -> "Workout updated successfully"
+                vol > 0.0 -> "Workout saved · ${WorkoutMath.formatVolume(vol)} lifted"
+                else -> "Workout saved · ~$kcal kcal est."
+            }
+            showToast(msg)
+            onSaved(wasEditing)
         }
     }
 
@@ -555,6 +651,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun personalRecordKg(exerciseName: String): Double {
+        if (ExerciseCatalog.isCardioExercise(exerciseName, uiState.value.allExercises)) return 0.0
         return allSessionsOf(exerciseName)
             .flatMap { it.second.sets }
             .maxOfOrNull { it.weightKg } ?: 0.0

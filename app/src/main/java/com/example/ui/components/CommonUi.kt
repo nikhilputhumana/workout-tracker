@@ -33,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.ExerciseCatalog
+import com.example.domain.ExerciseDefinition
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
 import com.example.ui.theme.LocalWorkoutPalette
@@ -89,12 +90,12 @@ fun MuscleGroupTag(
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(pair.bg)
-            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = group,
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = pair.fg
         )
@@ -112,12 +113,12 @@ fun StatusBadge(
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
             .background(bg)
-            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .padding(horizontal = 8.dp, vertical = 4.dp)
     ) {
         Text(
             text = label,
-            fontSize = 11.sp,
-            lineHeight = 15.sp,
+            fontSize = 12.sp,
+            lineHeight = 16.sp,
             fontWeight = FontWeight.SemiBold,
             color = fg
         )
@@ -130,17 +131,28 @@ fun KpiTile(
     value: String,
     sub: String,
     subColor: Color? = null,
+    trailingHeader: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
     BorderedCard(modifier = modifier) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            SectionLabel(label)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SectionLabel(label, modifier = Modifier.weight(1f))
+                if (trailingHeader != null) {
+                    Spacer(Modifier.width(6.dp))
+                    trailingHeader()
+                }
+            }
             Text(
-                text = value,
+                text = value.ifEmpty { " " },
                 style = MaterialTheme.typography.headlineSmall.copy(
                     fontFeatureSettings = "tnum"
                 ),
@@ -150,8 +162,8 @@ fun KpiTile(
             )
             Text(
                 text = sub,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
                 fontWeight = FontWeight.Medium,
                 color = subColor ?: palette.muted,
                 maxLines = 1,
@@ -167,18 +179,19 @@ fun SessionSummaryCard(
     session: WorkoutSession,
     bodyWeightKg: Double,
     prCount: Int,
+    allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
-    val vol = WorkoutMath.sessionVolume(session)
+    val vol = WorkoutMath.sessionVolume(session, allExercises)
     val sets = WorkoutMath.sessionSets(session)
-    val kcal = WorkoutMath.estimateCalories(session.groups, session.durationMinutes, bodyWeightKg)
+    val kcal = WorkoutMath.estimateSessionCalories(session, bodyWeightKg, allExercises)
 
     BorderedCard(modifier = modifier, onClick = onClick) {
         Column(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp)
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -197,17 +210,19 @@ fun SessionSummaryCard(
                     color = palette.faint
                 )
                 Spacer(Modifier.weight(1f))
-                Text(
-                    text = "${session.durationMinutes} min",
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.Medium,
-                    color = palette.muted
-                )
+                if (session.durationMinutes > 0) {
+                    Text(
+                        text = "${session.durationMinutes} min",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.muted
+                    )
+                }
             }
 
             FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                verticalArrangement = Arrangement.spacedBy(5.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 session.groups.forEach { g -> MuscleGroupTag(g) }
                 if (prCount > 0) {
@@ -238,24 +253,28 @@ fun SessionSummaryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(
-                    text = "${WorkoutMath.formatVolume(vol)} lifted",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = palette.text2
-                )
+                if (vol > 0.0) {
+                    Text(
+                        text = "${WorkoutMath.formatVolume(vol)} lifted",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.text2
+                    )
+                }
                 Text(
                     text = "$sets sets",
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = palette.text2
                 )
-                Text(
-                    text = "~$kcal kcal",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = palette.text2
-                )
+                if (kcal > 0) {
+                    Text(
+                        text = "~$kcal kcal",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.text2
+                    )
+                }
             }
         }
     }

@@ -98,8 +98,8 @@ fun ExerciseLibraryScreen(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             OutlinedTextField(
@@ -163,7 +163,7 @@ fun ExerciseLibraryScreen(
                         ) {
                             Text(
                                 text = chip,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selected) palette.brandInk else palette.text2
                             )
@@ -176,6 +176,17 @@ fun ExerciseLibraryScreen(
         items(itemsList, key = { it.name }) { def ->
             val last = lastSessionOf(def.name)
             val pr = personalRecordKg(def.name)
+            val isCardio = ExerciseCatalog.isCardioExercise(def.name, allExercises)
+            val lastBest = last?.second?.let { WorkoutMath.bestSet(it) }
+            val primaryMetric = if (isCardio) {
+                when {
+                    pr > 0.0 -> "${WorkoutMath.formatKg(pr)} km"
+                    lastBest != null && lastBest.reps > 0 -> "${lastBest.reps} min"
+                    else -> "—"
+                }
+            } else {
+                if (pr > 0.0) "${WorkoutMath.formatKg(pr)} kg" else "—"
+            }
             BorderedCard(
                 onClick = { onOpenDetail(def.name) },
                 modifier = Modifier.testTag("library_item_${def.name.lowercase().replace(' ', '_')}")
@@ -183,9 +194,9 @@ fun ExerciseLibraryScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     MuscleFigureBox(
                         regions = def.regions,
@@ -203,20 +214,20 @@ fun ExerciseLibraryScreen(
                         )
                         Text(
                             text = "${def.equipment} · ${def.groups.take(2).joinToString(", ")}",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = palette.muted
                         )
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
-                            text = if (pr > 0.0) "${WorkoutMath.formatKg(pr)} kg" else "—",
+                            text = primaryMetric,
                             style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"),
                             fontWeight = FontWeight.SemiBold,
                             color = palette.text
                         )
                         Text(
                             text = last?.let { WorkoutMath.formatAgo(it.first) } ?: "never",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = palette.faint
                         )
                     }
@@ -245,30 +256,47 @@ fun ExerciseDetailScreen(
         regions = listOf("chest"),
         keywords = "Custom exercise you added"
     )
+    val isCardio = ExerciseCatalog.isCardioExercise(def.name, allExercises)
     val latest = historyRows.firstOrNull()
     val earliest = historyRows.lastOrNull()
     val latestBest = latest?.second?.let { WorkoutMath.bestSet(it) }
     val earliestBest = earliest?.second?.let { WorkoutMath.bestSet(it) }
-    val gain1Rm = if (latestBest != null && earliestBest != null && historyRows.size > 1) {
+    val gain1Rm = if (!isCardio && latestBest != null && earliestBest != null && historyRows.size > 1) {
         WorkoutMath.epley1Rm(latestBest.reps, latestBest.weightKg) -
             WorkoutMath.epley1Rm(earliestBest.reps, earliestBest.weightKg)
     } else 0.0
 
     val chartPoints = historyRows.reversed().mapNotNull { (dateIso, ex) ->
         val best = WorkoutMath.bestSet(ex) ?: return@mapNotNull null
-        LineChartPoint(
-            label = WorkoutMath.formatDayMonth(dateIso),
-            value = best.weightKg.toFloat(),
-            unit = " kg"
-        )
+        if (isCardio) {
+            when {
+                best.weightKg > 0.0 -> LineChartPoint(
+                    label = WorkoutMath.formatDayMonth(dateIso),
+                    value = best.weightKg.toFloat(),
+                    unit = " km"
+                )
+                best.reps > 0 -> LineChartPoint(
+                    label = WorkoutMath.formatDayMonth(dateIso),
+                    value = best.reps.toFloat(),
+                    unit = " min"
+                )
+                else -> null
+            }
+        } else {
+            LineChartPoint(
+                label = WorkoutMath.formatDayMonth(dateIso),
+                value = best.weightKg.toFloat(),
+                unit = " kg"
+            )
+        }
     }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             BorderedCard {
@@ -326,11 +354,19 @@ fun ExerciseDetailScreen(
                         modifier = Modifier.weight(1f)
                     )
                     KpiTile(
-                        label = "Last weight",
+                        label = if (isCardio) "Last cardio" else "Last weight",
                         value = latestBest?.let {
-                            if (it.weightKg > 0.0) "${WorkoutMath.formatKg(it.weightKg)} kg" else "Bodyweight"
+                            if (isCardio) {
+                                when {
+                                    it.weightKg > 0.0 -> "${WorkoutMath.formatKg(it.weightKg)} km"
+                                    it.reps > 0 -> "${it.reps} min"
+                                    else -> "Logged"
+                                }
+                            } else {
+                                if (it.weightKg > 0.0) "${WorkoutMath.formatKg(it.weightKg)} kg" else "Bodyweight"
+                            }
                         } ?: "—",
-                        sub = latest?.let { WorkoutMath.formatSetSummary(it.second) } ?: "",
+                        sub = latest?.let { WorkoutMath.formatSetSummary(it.second, allExercises) } ?: "",
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -339,8 +375,12 @@ fun ExerciseDetailScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     KpiTile(
-                        label = "Best weight",
-                        value = if (personalRecordKg > 0.0) "${WorkoutMath.formatKg(personalRecordKg)} kg" else "—",
+                        label = if (isCardio) "Best distance" else "Best weight",
+                        value = if (isCardio) {
+                            if (personalRecordKg > 0.0) "${WorkoutMath.formatKg(personalRecordKg)} km" else "—"
+                        } else {
+                            if (personalRecordKg > 0.0) "${WorkoutMath.formatKg(personalRecordKg)} kg" else "—"
+                        },
                         sub = "personal record",
                         subColor = palette.orangeInk,
                         modifier = Modifier.weight(1f)
@@ -387,7 +427,7 @@ fun ExerciseDetailScreen(
                     BorderedCard {
                         Column(modifier = Modifier.padding(14.dp)) {
                             SectionLabel(
-                                text = "Top-set weight over time",
+                                text = if (isCardio) "Distance / duration over time" else "Top-set weight over time",
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             TrendLineChart(points = chartPoints, chartHeight = 80.dp)
@@ -415,17 +455,19 @@ fun ExerciseDetailScreen(
                         historyRows.forEach { (dateIso, ex) ->
                             val rpeColor = when (ex.rpe) {
                                 RpeRating.EASY -> palette.greenInk
+                                RpeRating.RIGHT -> palette.brandInk
                                 RpeRating.HARD -> palette.redInk
-                                else -> palette.faint
+                                null -> palette.faint
                             }
+                            val vol = WorkoutMath.exerciseVolume(ex, allExercises)
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    .padding(horizontal = 14.dp, vertical = 11.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(modifier = Modifier.width(76.dp)) {
+                                Column(modifier = Modifier.width(80.dp)) {
                                     Text(
                                         text = WorkoutMath.formatDayMonth(dateIso),
                                         style = MaterialTheme.typography.bodyMedium,
@@ -434,12 +476,12 @@ fun ExerciseDetailScreen(
                                     )
                                     Text(
                                         text = WorkoutMath.formatAgo(dateIso),
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = palette.faint
                                     )
                                 }
                                 Text(
-                                    text = WorkoutMath.formatSetSummary(ex),
+                                    text = WorkoutMath.formatSetSummary(ex, allExercises),
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontFeatureSettings = "tnum"
                                     ),
@@ -447,15 +489,17 @@ fun ExerciseDetailScreen(
                                     modifier = Modifier.weight(1f)
                                 )
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = WorkoutMath.formatVolume(WorkoutMath.exerciseVolume(ex)),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = palette.text
-                                    )
+                                    if (vol > 0.0) {
+                                        Text(
+                                            text = WorkoutMath.formatVolume(vol),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = palette.text
+                                        )
+                                    }
                                     Text(
                                         text = ex.rpe?.label?.lowercase() ?: "—",
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = rpeColor
                                     )
                                 }

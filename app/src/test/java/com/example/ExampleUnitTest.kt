@@ -111,5 +111,80 @@ class ExampleUnitTest {
     )
     assertEquals(null, workoutsOnly.profile)
     assertEquals(1, workoutsOnly.sessions.size)
+
+    val withWeeklyTarget = backupManager.serialize(
+      profile.copy(weeklyTargetSessions = 6),
+      measures,
+      fees,
+      bw,
+      sessions,
+      custom
+    )
+    assertEquals(6, backupManager.deserialize(withWeeklyTarget).profile?.weeklyTarget)
+
+    val withoutWeeklyTarget = backupManager.deserialize(
+      """{"app":"workout-tracker","version":1,"profile":{"name":"Sam","age":25,"gender":"Male","height":175,"weight":74.5},"sessions":[]}"""
+    )
+    assertEquals(4, withoutWeeklyTarget.profile?.weeklyTarget)
+  }
+
+  @Test
+  fun trainingSplits_and_cardioAndClubbingBehavior() {
+    assertTrue(ExerciseCatalog.TRAINING_SPLITS.any { it.name == "I will choose this later" })
+    assertTrue(ExerciseCatalog.BUILT_IN_EXERCISES.any { it.name == "Run" && "Cardio" in it.groups })
+    assertTrue(ExerciseCatalog.BUILT_IN_EXERCISES.any { it.name == "Walk" && "Cardio" in it.groups })
+
+    val runEx = LoggedExercise(
+      id = 10L,
+      name = "Run",
+      equipment = "Bodyweight",
+      sets = listOf(LoggedSet(reps = 30, weightKg = 5.0))
+    )
+    assertEquals("30 min · 5 km", WorkoutMath.formatSetSummary(runEx))
+    assertEquals(0.0, WorkoutMath.exerciseVolume(runEx), 0.01)
+    assertTrue(WorkoutMath.estimateCardioCalories("Run", 30, 5.0, 75.0) > 300.0)
+    assertTrue(
+      WorkoutMath.estimateCardioCalories("Run", 30, 5.0, 75.0) >
+        WorkoutMath.estimateCardioCalories("Walk", 30, 3.0, 75.0)
+    )
+
+    val pushOnly = LoggedExercise(id = 1L, name = "Custom Push", equipment = "Bar", sets = listOf(LoggedSet(reps = 10, weightKg = 40.0)))
+    assertEquals(
+      "Chest",
+      WorkoutMath.primaryMuscleGroupForStats(
+        pushOnly,
+        WorkoutSession(dateIso = "2026-02-01", groups = listOf("Push"), durationMinutes = 0, exercises = listOf(pushOnly)),
+        emptyList()
+      )
+    )
+    val pullOnly = LoggedExercise(id = 2L, name = "Custom Pull", equipment = "Cable", sets = listOf(LoggedSet(reps = 10, weightKg = 40.0)))
+    assertEquals(
+      "Back",
+      WorkoutMath.primaryMuscleGroupForStats(
+        pullOnly,
+        WorkoutSession(dateIso = "2026-02-01", groups = listOf("Pull"), durationMinutes = 0, exercises = listOf(pullOnly)),
+        emptyList()
+      )
+    )
+
+    val s1 = WorkoutSession(
+      id = 1L,
+      dateIso = "2026-03-01",
+      groups = listOf("Push", "Chest"),
+      durationMinutes = 0,
+      exercises = listOf(LoggedExercise(1L, "Barbell bench press", "Bar", listOf(LoggedSet(reps = 8, weightKg = 60.0))))
+    )
+    val s2 = WorkoutSession(
+      id = 2L,
+      dateIso = "2026-03-01",
+      groups = listOf("Cardio"),
+      durationMinutes = 0,
+      exercises = listOf(runEx)
+    )
+    val clubbed = WorkoutMath.clubSessionsByDate(listOf(s2, s1))
+    assertEquals(1, clubbed.size)
+    assertEquals(listOf(2L, 1L), clubbed.first().sourceIds)
+    assertEquals(2, clubbed.first().session.exercises.size)
+    assertEquals(0, clubbed.first().session.durationMinutes)
   }
 }

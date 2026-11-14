@@ -10,7 +10,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -149,7 +149,7 @@
             }
           ],
           "rpe": null,
-          "note": "Side raise with arms 90° bend"
+          "note": "Side raise with arms 90\u00b0 bend"
         },
         {
           "name": "Seated dip machine",
@@ -250,7 +250,7 @@
       "groups": [
         "Back"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -366,7 +366,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Vertical grip · easy"
+          "note": "Vertical grip \u00b7 easy"
         },
         {
           "name": "Lat pulldown",
@@ -412,7 +412,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Back · last somewhat diff"
+          "note": "Back \u00b7 last somewhat diff"
         },
         {
           "name": "Cardio",
@@ -434,7 +434,7 @@
       "groups": [
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -606,7 +606,7 @@
         "Abs",
         "Cardio"
       ],
-      "mins": 25,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -648,7 +648,7 @@
             }
           ],
           "rpe": null,
-          "note": "Cardio + rope · വടം · Cardio + rope (വടം)"
+          "note": "Cardio + rope \u00b7 \u0d35\u0d1f\u0d02 \u00b7 Cardio + rope (\u0d35\u0d1f\u0d02)"
         },
         {
           "name": "Standing calf raise",
@@ -680,7 +680,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 28,
+      "mins": 0,
       "note": "Nadu vetti - hence stopped.",
       "ex": [
         {
@@ -787,7 +787,7 @@
       "groups": [
         "Chest"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -971,7 +971,7 @@
       "groups": [
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1147,7 +1147,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1240,7 +1240,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shrugs - smith machine · can go higher"
+          "note": "Shrugs - smith machine \u00b7 can go higher"
         },
         {
           "name": "Face pull",
@@ -1285,7 +1285,7 @@
       "groups": [
         "Back"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1424,7 +1424,7 @@
             }
           ],
           "rpe": null,
-          "note": "Slanding grip · hold type"
+          "note": "Slanding grip \u00b7 hold type"
         },
         {
           "name": "Lat pulldown",
@@ -1469,7 +1469,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1627,7 +1627,7 @@
       "groups": [
         "Cardio"
       ],
-      "mins": 30,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1652,7 +1652,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 77,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -1917,7 +1917,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 77,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -2180,7 +2180,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -2350,7 +2350,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -2512,7 +2512,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Rope pushdown · somewhat diff"
+          "note": "Rope pushdown \u00b7 somewhat diff"
         },
         {
           "name": "Dumbbell kickback",
@@ -2592,7 +2592,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -2731,7 +2731,7 @@
             }
           ],
           "rpe": null,
-          "note": "Hammer - cable · start w 20"
+          "note": "Hammer - cable \u00b7 start w 20"
         },
         {
           "name": "Cable curl",
@@ -2832,7 +2832,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -3002,7 +3002,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -3095,7 +3095,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Cable pushdown · korch diff"
+          "note": "Cable pushdown \u00b7 korch diff"
         },
         {
           "name": "Seated dip machine",
@@ -3211,7 +3211,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "Wrist injury - stopped",
       "ex": [
         {
@@ -3428,7 +3428,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -3616,7 +3616,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -3827,7 +3827,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -4021,7 +4021,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -4168,7 +4168,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -4238,7 +4238,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Kickback db · easy"
+          "note": "Kickback db \u00b7 easy"
         },
         {
           "name": "Overhead press",
@@ -4261,7 +4261,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Shoulder press - bar · last diff"
+          "note": "Shoulder press - bar \u00b7 last diff"
         },
         {
           "name": "Dumbbell shoulder press",
@@ -4284,7 +4284,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shoulder press - db 90° to shoulder - raise up"
+          "note": "Shoulder press - db 90\u00b0 to shoulder - raise up"
         },
         {
           "name": "Cable front raise",
@@ -4410,7 +4410,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 77,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -4434,7 +4434,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Biceps curl - small bar · diff"
+          "note": "Biceps curl - small bar \u00b7 diff"
         },
         {
           "name": "Hammer curl",
@@ -4549,7 +4549,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Straight arm pulldown in cable · somewhat diff"
+          "note": "Straight arm pulldown in cable \u00b7 somewhat diff"
         },
         {
           "name": "Dumbbell shrug",
@@ -4572,7 +4572,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shrugs db · start w 25"
+          "note": "Shrugs db \u00b7 start w 25"
         },
         {
           "name": "Upright row",
@@ -4673,7 +4673,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -4833,7 +4833,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -5050,7 +5050,7 @@
       "groups": [
         "Abs"
       ],
-      "mins": 25,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -5131,7 +5131,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 77,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -5316,7 +5316,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shrugs - smith · start w 20"
+          "note": "Shrugs - smith \u00b7 start w 20"
         },
         {
           "name": "Face pull",
@@ -5394,7 +5394,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -5487,7 +5487,7 @@
             }
           ],
           "rpe": null,
-          "note": "2 plates · start w 20"
+          "note": "2 plates \u00b7 start w 20"
         },
         {
           "name": "Leg curl",
@@ -5549,7 +5549,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "Crossover skipped",
       "ex": [
         {
@@ -5642,7 +5642,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Bench press - inclined - bar · last somewhat diff"
+          "note": "Bench press - inclined - bar \u00b7 last somewhat diff"
         },
         {
           "name": "Pec deck",
@@ -5688,7 +5688,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Shoulder press - bar · diff"
+          "note": "Shoulder press - bar \u00b7 diff"
         },
         {
           "name": "Lateral raise",
@@ -5745,7 +5745,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "Shoulder skipped",
       "ex": [
         {
@@ -5815,7 +5815,7 @@
             }
           ],
           "rpe": null,
-          "note": "Row machine - close grip · may start w 20"
+          "note": "Row machine - close grip \u00b7 may start w 20"
         },
         {
           "name": "Lat pulldown",
@@ -5962,7 +5962,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -6117,7 +6117,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -6359,7 +6359,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 85,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -6452,7 +6452,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Straight arm pull down - cable · last diff"
+          "note": "Straight arm pull down - cable \u00b7 last diff"
         },
         {
           "name": "Upright row",
@@ -6475,7 +6475,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Upright row - cable · last diff"
+          "note": "Upright row - cable \u00b7 last diff"
         },
         {
           "name": "Dumbbell shrug",
@@ -6668,7 +6668,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -6856,7 +6856,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -6995,7 +6995,7 @@
             }
           ],
           "rpe": null,
-          "note": "Olympic box bar · Weight not specified"
+          "note": "Olympic box bar \u00b7 Weight not specified"
         },
         {
           "name": "Skull crusher",
@@ -7098,7 +7098,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "(Remaining shoulder skipped)",
       "ex": [
         {
@@ -7315,7 +7315,7 @@
       "groups": [
         "Abs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -7455,7 +7455,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -7623,7 +7623,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 84,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -7739,7 +7739,7 @@
             }
           ],
           "rpe": null,
-          "note": "Upright row - wide for front delt · superset w next exercise"
+          "note": "Upright row - wide for front delt \u00b7 superset w next exercise"
         },
         {
           "name": "Front raise",
@@ -7762,7 +7762,7 @@
             }
           ],
           "rpe": null,
-          "note": "Front raise - hand 90° - db"
+          "note": "Front raise - hand 90\u00b0 - db"
         },
         {
           "name": "Overhead dumbbell triceps extension",
@@ -7911,7 +7911,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -7958,7 +7958,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Single arm row in cable · somewhat easy"
+          "note": "Single arm row in cable \u00b7 somewhat easy"
         },
         {
           "name": "Straight-arm pulldown",
@@ -8082,7 +8082,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -8207,7 +8207,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -8343,7 +8343,7 @@
             }
           ],
           "rpe": null,
-          "note": "0 plate · 10 to 30"
+          "note": "0 plate \u00b7 10 to 30"
         },
         {
           "name": "Standing calf raise",
@@ -8377,7 +8377,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -8598,7 +8598,7 @@
         "Chest",
         "Back"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -8771,7 +8771,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -8990,7 +8990,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "Shoulder skipped.",
       "ex": [
         {
@@ -9184,7 +9184,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -9331,7 +9331,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "(Next push day, do 3 chest, 4 triceps)",
       "ex": [
         {
@@ -9378,7 +9378,7 @@
             }
           ],
           "rpe": null,
-          "note": "Inclined - db · superset w flies"
+          "note": "Inclined - db \u00b7 superset w flies"
         },
         {
           "name": "Pec deck",
@@ -9447,7 +9447,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Skull - db · last diff"
+          "note": "Skull - db \u00b7 last diff"
         },
         {
           "name": "Triceps pushdown",
@@ -9470,7 +9470,7 @@
             }
           ],
           "rpe": null,
-          "note": "Pushdown - cable · superset w dips"
+          "note": "Pushdown - cable \u00b7 superset w dips"
         },
         {
           "name": "Seated dip machine",
@@ -9527,7 +9527,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -9744,7 +9744,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -9869,7 +9869,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -10034,7 +10034,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -10150,7 +10150,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Biceps curl - bar · last diff"
+          "note": "Biceps curl - bar \u00b7 last diff"
         },
         {
           "name": "Hammer curl",
@@ -10219,7 +10219,7 @@
             }
           ],
           "rpe": null,
-          "note": "Cable biceps curl · 21"
+          "note": "Cable biceps curl \u00b7 21"
         },
         {
           "name": "Ab workout",
@@ -10276,7 +10276,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -10474,7 +10474,7 @@
         "Chest",
         "Back"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -10671,7 +10671,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -10866,7 +10866,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11005,7 +11005,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Hammer - db · somewhat diff"
+          "note": "Hammer - db \u00b7 somewhat diff"
         },
         {
           "name": "Concentration curl",
@@ -11061,7 +11061,7 @@
         "Shoulders",
         "Abs"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11232,7 +11232,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11359,7 +11359,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11532,7 +11532,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 77,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11556,7 +11556,7 @@
             }
           ],
           "rpe": null,
-          "note": "Bend over - bar · start w 7.5"
+          "note": "Bend over - bar \u00b7 start w 7.5"
         },
         {
           "name": "Seated cable row",
@@ -11671,7 +11671,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Biceps curl - bar · somewhat diff"
+          "note": "Biceps curl - bar \u00b7 somewhat diff"
         },
         {
           "name": "Cable hammer curl",
@@ -11790,7 +11790,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -11814,7 +11814,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Shoulder press - smith · diff"
+          "note": "Shoulder press - smith \u00b7 diff"
         },
         {
           "name": "Arnold press",
@@ -11961,7 +11961,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -12111,7 +12111,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -12181,7 +12181,7 @@
             }
           ],
           "rpe": null,
-          "note": "Cable pushdown - V grip · can increase"
+          "note": "Cable pushdown - V grip \u00b7 can increase"
         },
         {
           "name": "Cable triceps kickback",
@@ -12281,7 +12281,7 @@
         "Chest",
         "Back"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -12499,7 +12499,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -12638,7 +12638,7 @@
             }
           ],
           "rpe": null,
-          "note": "Dips · other grip"
+          "note": "Dips \u00b7 other grip"
         },
         {
           "name": "Dumbbell kickback",
@@ -12708,7 +12708,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -12801,7 +12801,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Row in smith · somewhat diff"
+          "note": "Row in smith \u00b7 somewhat diff"
         },
         {
           "name": "Preacher curl",
@@ -12902,7 +12902,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -13042,7 +13042,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -13220,7 +13220,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "good pump for triceps",
       "ex": [
         {
@@ -13336,7 +13336,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Cable pushdown - V grip · last diff"
+          "note": "Cable pushdown - V grip \u00b7 last diff"
         },
         {
           "name": "Seated dip machine",
@@ -13359,7 +13359,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Dips · last somewhat diff"
+          "note": "Dips \u00b7 last somewhat diff"
         },
         {
           "name": "Standing calf raise",
@@ -13411,7 +13411,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -13618,7 +13618,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -13642,7 +13642,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shoulder press - bar · start w 5"
+          "note": "Shoulder press - bar \u00b7 start w 5"
         },
         {
           "name": "Arnold press",
@@ -13812,7 +13812,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -13915,7 +13915,7 @@
             }
           ],
           "rpe": null,
-          "note": "2 plates · can go higher"
+          "note": "2 plates \u00b7 can go higher"
         },
         {
           "name": "Leg curl",
@@ -13977,7 +13977,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -14191,7 +14191,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -14261,7 +14261,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Straight arm pulldown - cable · diff"
+          "note": "Straight arm pulldown - cable \u00b7 diff"
         },
         {
           "name": "Seated incline dumbbell curl",
@@ -14284,7 +14284,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Seated biceps curl - db · last somewhat diff"
+          "note": "Seated biceps curl - db \u00b7 last somewhat diff"
         },
         {
           "name": "Preacher curl",
@@ -14353,7 +14353,7 @@
             }
           ],
           "rpe": null,
-          "note": "Cable buceps curl · 21"
+          "note": "Cable buceps curl \u00b7 21"
         },
         {
           "name": "Standing stick twists",
@@ -14408,7 +14408,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -14597,7 +14597,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -14744,7 +14744,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -14940,7 +14940,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -15102,7 +15102,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Seated db curl - inclined · somewhat diff"
+          "note": "Seated db curl - inclined \u00b7 somewhat diff"
         },
         {
           "name": "Standing calf raise",
@@ -15134,7 +15134,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -15330,7 +15330,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -15423,7 +15423,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Head over - db · somewhat easy"
+          "note": "Head over - db \u00b7 somewhat easy"
         },
         {
           "name": "Seated dip machine",
@@ -15539,7 +15539,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -15678,7 +15678,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Hammer - db · not easy"
+          "note": "Hammer - db \u00b7 not easy"
         },
         {
           "name": "Concentration curl",
@@ -15746,7 +15746,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -15770,7 +15770,7 @@
             }
           ],
           "rpe": null,
-          "note": "Military press · DB"
+          "note": "Military press \u00b7 DB"
         },
         {
           "name": "Cable lateral raise",
@@ -15839,7 +15839,7 @@
             }
           ],
           "rpe": null,
-          "note": "Shrugs · DB"
+          "note": "Shrugs \u00b7 DB"
         },
         {
           "name": "Ab workout",
@@ -15907,7 +15907,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16044,7 +16044,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16155,7 +16155,7 @@
             }
           ],
           "rpe": null,
-          "note": "Skull - Z bar · stopper, stopper, 2.5"
+          "note": "Skull - Z bar \u00b7 stopper, stopper, 2.5"
         },
         {
           "name": "Bench dip",
@@ -16235,7 +16235,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16282,7 +16282,7 @@
             }
           ],
           "rpe": null,
-          "note": "Single arm row - cable · can go higher"
+          "note": "Single arm row - cable \u00b7 can go higher"
         },
         {
           "name": "Lat pulldown",
@@ -16351,7 +16351,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Biceps curl - short bar · last diff"
+          "note": "Biceps curl - short bar \u00b7 last diff"
         },
         {
           "name": "Cable hammer curl",
@@ -16429,7 +16429,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16476,7 +16476,7 @@
             }
           ],
           "rpe": null,
-          "note": "Side raise - db - hands 90°"
+          "note": "Side raise - db - hands 90\u00b0"
         },
         {
           "name": "Upright row",
@@ -16600,7 +16600,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16765,7 +16765,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -16938,7 +16938,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -17008,7 +17008,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Cable straight arm pulldown · last somewhat diff"
+          "note": "Cable straight arm pulldown \u00b7 last somewhat diff"
         },
         {
           "name": "One-arm dumbbell row",
@@ -17054,7 +17054,7 @@
             }
           ],
           "rpe": null,
-          "note": "Row in machine - close grip · start w 15"
+          "note": "Row in machine - close grip \u00b7 start w 15"
         },
         {
           "name": "Preacher curl",
@@ -17100,7 +17100,7 @@
             }
           ],
           "rpe": null,
-          "note": "Olympic box bar · 0, 1 stopper, 2 stopper"
+          "note": "Olympic box bar \u00b7 0, 1 stopper, 2 stopper"
         },
         {
           "name": "Cable curl",
@@ -17155,7 +17155,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -17326,7 +17326,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -17463,7 +17463,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -17510,7 +17510,7 @@
             }
           ],
           "rpe": null,
-          "note": "Skull - Z bar · can go higher · stopper, 2.5, 2.5 + stopper"
+          "note": "Skull - Z bar \u00b7 can go higher \u00b7 stopper, 2.5, 2.5 + stopper"
         },
         {
           "name": "Seated dip machine",
@@ -17533,7 +17533,7 @@
             }
           ],
           "rpe": "EASY",
-          "note": "Dips · somewhat easy"
+          "note": "Dips \u00b7 somewhat easy"
         },
         {
           "name": "Triceps pushdown",
@@ -17579,7 +17579,7 @@
             }
           ],
           "rpe": null,
-          "note": "Kickback - db · can increase"
+          "note": "Kickback - db \u00b7 can increase"
         },
         {
           "name": "Forearm wrist curl",
@@ -17613,7 +17613,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -17706,7 +17706,7 @@
             }
           ],
           "rpe": null,
-          "note": "Biceps curl - Z bar · start w 5"
+          "note": "Biceps curl - Z bar \u00b7 start w 5"
         },
         {
           "name": "Cable hammer curl",
@@ -17784,7 +17784,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 70,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18004,7 +18004,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18164,7 +18164,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18291,7 +18291,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18493,7 +18493,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18517,7 +18517,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Shoulder press - db · last somewhat diff"
+          "note": "Shoulder press - db \u00b7 last somewhat diff"
         },
         {
           "name": "Lateral raise",
@@ -18540,7 +18540,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Side raise - db - straight arm · somewhat diff"
+          "note": "Side raise - db - straight arm \u00b7 somewhat diff"
         },
         {
           "name": "Upright row",
@@ -18664,7 +18664,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18744,7 +18744,7 @@
             }
           ],
           "rpe": null,
-          "note": "2 plates · start higher"
+          "note": "2 plates \u00b7 start higher"
         },
         {
           "name": "Leg curl",
@@ -18810,7 +18810,7 @@
         "Biceps",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -18834,7 +18834,7 @@
             }
           ],
           "rpe": null,
-          "note": "T-bar · 2 grips"
+          "note": "T-bar \u00b7 2 grips"
         },
         {
           "name": "Cable fly",
@@ -18978,7 +18978,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19002,7 +19002,7 @@
             }
           ],
           "rpe": null,
-          "note": "Chest machine - flat, inclined, declined- 15, 25, 35 · Weight not specified"
+          "note": "Chest machine - flat, inclined, declined- 15, 25, 35 \u00b7 Weight not specified"
         },
         {
           "name": "Skull crusher",
@@ -19025,7 +19025,7 @@
             }
           ],
           "rpe": null,
-          "note": "Skull - Z bar · with stopper (+0.75 kg/side)"
+          "note": "Skull - Z bar \u00b7 with stopper (+0.75 kg/side)"
         },
         {
           "name": "Seated dip machine",
@@ -19105,7 +19105,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 63,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19312,7 +19312,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19382,7 +19382,7 @@
             }
           ],
           "rpe": "HARD",
-          "note": "Side raise - cable · last diff"
+          "note": "Side raise - cable \u00b7 last diff"
         },
         {
           "name": "Rear-delt fly",
@@ -19478,7 +19478,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19622,7 +19622,7 @@
         "Chest",
         "Back"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19813,7 +19813,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -19986,7 +19986,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -20170,7 +20170,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -20341,7 +20341,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -20370,7 +20370,7 @@
             }
           ],
           "rpe": null,
-          "note": "Squat - smith · go w same weights"
+          "note": "Squat - smith \u00b7 go w same weights"
         },
         {
           "name": "Leg press",
@@ -20488,7 +20488,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -20656,7 +20656,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 56,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -20680,7 +20680,7 @@
             }
           ],
           "rpe": null,
-          "note": "Bend over row - bar · start w 7.5"
+          "note": "Bend over row - bar \u00b7 start w 7.5"
         },
         {
           "name": "Seated machine row",
@@ -20772,7 +20772,7 @@
             }
           ],
           "rpe": null,
-          "note": "Biceps curl - Z bar · with stopper (+0.75 kg/side)"
+          "note": "Biceps curl - Z bar \u00b7 with stopper (+0.75 kg/side)"
         },
         {
           "name": "Hammer curl",
@@ -20840,7 +20840,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21011,7 +21011,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 30,
+      "mins": 0,
       "note": "Farewell",
       "ex": [
         {
@@ -21046,7 +21046,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21196,7 +21196,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21367,7 +21367,7 @@
       "groups": [
         "Shoulders"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21538,7 +21538,7 @@
       "groups": [
         "Legs"
       ],
-      "mins": 35,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21680,7 +21680,7 @@
         "Chest",
         "Triceps"
       ],
-      "mins": 42,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21750,7 +21750,7 @@
             }
           ],
           "rpe": null,
-          "note": "Skull - Z bar · without stopper"
+          "note": "Skull - Z bar \u00b7 without stopper"
         },
         {
           "name": "Triceps pushdown",
@@ -21835,7 +21835,7 @@
         "Back",
         "Biceps"
       ],
-      "mins": 49,
+      "mins": 0,
       "note": "",
       "ex": [
         {
@@ -21887,7 +21887,7 @@
             }
           ],
           "rpe": "RIGHT",
-          "note": "Lat pulldown - wide towards chest · last somewhat diff"
+          "note": "Lat pulldown - wide towards chest \u00b7 last somewhat diff"
         },
         {
           "name": "Cable bend-over row",

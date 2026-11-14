@@ -31,11 +31,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,7 +46,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.SplitPreset
 import com.example.domain.WorkoutMath
-import com.example.domain.WorkoutSession
 import com.example.ui.components.BorderedCard
 import com.example.ui.components.KpiTile
 import com.example.ui.components.MuscleFigureBox
@@ -74,19 +73,22 @@ fun HomeScreen(
     onOpenStats: () -> Unit,
     onOpenFees: () -> Unit,
     onOpenHistory: (Long?) -> Unit,
-    onLoadSampleWorkouts: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
     val todayIso = WorkoutMath.todayIso()
+    val clubbedSessions = remember(uiState.sessions) {
+        WorkoutMath.clubSessionsByDate(uiState.sessions)
+    }
 
     // Rolling 7-day volume bars (6 weeks)
     val bars = (5 downTo 0).map { weekBack ->
         val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
         val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
-        val vol = uiState.sessions
+        val vol = clubbedSessions
+            .map { it.session }
             .filter { it.dateIso in startIso..endIso }
-            .sumOf { WorkoutMath.sessionVolume(it) }
+            .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
         VolumeBarPoint(
             label = WorkoutMath.shortWeekBucketLabel(startIso),
             topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
@@ -96,15 +98,16 @@ fun HomeScreen(
     }
 
     val win7Start = WorkoutMath.isoOffsetDays(-6, todayIso)
-    val inLast7 = uiState.sessions.filter { it.dateIso >= win7Start }
+    val inLast7 = clubbedSessions.map { it.session }.filter { it.dateIso >= win7Start }
+    val weeklyTarget = uiState.profile.weeklyTargetSessions.coerceIn(1, 7)
     val thisWeekVol = bars.last().value.toDouble()
     val prevWeekVol = bars.getOrNull(bars.lastIndex - 1)?.value?.toDouble() ?: 0.0
     val volDiff = thisWeekVol - prevWeekVol
     val wkKcal = inLast7.sumOf {
-        WorkoutMath.estimateCalories(it.groups, it.durationMinutes, uiState.profile.bodyWeightKg)
+        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
     }
 
-    val latestSession = uiState.sessions.maxByOrNull { it.dateIso }
+    val latestSession = clubbedSessions.firstOrNull()?.session
     val lastGapDays = latestSession?.let { WorkoutMath.daysBetween(it.dateIso, todayIso) }
 
     val dueIn = WorkoutMath.daysBetween(todayIso, uiState.gymFee.nextDueIso) ?: 10L
@@ -120,8 +123,8 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         val draft = uiState.activeDraft
         if (draft != null) {
@@ -135,7 +138,7 @@ fun HomeScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -147,7 +150,7 @@ fun HomeScreen(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Workout in progress",
+                                text = if (draft.editingSessionIds.isNotEmpty()) "Editing history workout" else "Workout in progress",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = palette.brandInk
@@ -236,7 +239,7 @@ fun HomeScreen(
                         SectionLabel("Suggested next")
                         Text(
                             text = if (gapDays == null) "Not logged yet" else "$gapDays days since last",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = palette.faint
                         )
@@ -256,14 +259,14 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 preset.groups.forEach { MuscleGroupTag(it) }
                             }
                             Text(
                                 text = if (gapDays == null) {
-                                    "Recommended starting point from your split — no sessions recorded for ${preset.name.lowercase()} yet."
+                                    "Recommended starting point — no sessions recorded for ${preset.name.lowercase()} yet."
                                 } else {
                                     "Longest gap in your rotation — last ${preset.name.lowercase()} day was $gapDays days ago."
                                 },
@@ -283,7 +286,7 @@ fun HomeScreen(
                             border = BorderStroke(1.dp, palette.brandBd),
                             modifier = Modifier
                                 .weight(1f)
-                                .heightIn(min = 44.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable { onStartSuggestedSplit(preset) }
                                 .testTag("home_start_suggested_button")
@@ -302,7 +305,7 @@ fun HomeScreen(
                             color = palette.surface,
                             border = BorderStroke(1.dp, palette.borderStrong),
                             modifier = Modifier
-                                .heightIn(min = 44.dp)
+                                .heightIn(min = 48.dp)
                                 .clip(RoundedCornerShape(6.dp))
                                 .clickable(onClick = onCreateWorkout)
                                 .testTag("home_choose_groups_button")
@@ -340,9 +343,9 @@ fun HomeScreen(
                     )
                     KpiTile(
                         label = "Sessions",
-                        value = "${inLast7.size} / 4",
-                        sub = "last 7 days · target 4",
-                        subColor = if (inLast7.size >= 4) palette.greenInk else palette.muted,
+                        value = "${inLast7.size} / $weeklyTarget",
+                        sub = "last 7 days · target $weeklyTarget",
+                        subColor = if (inLast7.size >= weeklyTarget) palette.greenInk else palette.muted,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -409,13 +412,13 @@ fun HomeScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(36.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(feeBg),
                         contentAlignment = Alignment.Center
@@ -455,7 +458,7 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 SectionLabel("Recent workouts")
-                if (uiState.sessions.isNotEmpty()) {
+                if (clubbedSessions.isNotEmpty()) {
                     TextButton(
                         onClick = { onOpenHistory(null) },
                         modifier = Modifier.testTag("home_view_all_history_button")
@@ -471,7 +474,7 @@ fun HomeScreen(
             }
         }
 
-        if (uiState.sessions.isEmpty()) {
+        if (clubbedSessions.isEmpty()) {
             item {
                 BorderedCard(modifier = Modifier.testTag("home_empty_state_card")) {
                     Column(
@@ -494,30 +497,21 @@ fun HomeScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Tap Create workout above to log today's session, or load 10 sample workouts to explore charts and suggestions.",
+                            text = "Tap Create workout above to log today's session, or import an existing JSON backup from Settings.",
                             style = MaterialTheme.typography.bodySmall,
                             color = palette.muted
                         )
-                        OutlinedButton(
-                            onClick = onLoadSampleWorkouts,
-                            shape = RoundedCornerShape(6.dp),
-                            border = BorderStroke(1.dp, palette.brandBd),
-                            modifier = Modifier
-                                .padding(top = 4.dp)
-                                .heightIn(min = 44.dp)
-                                .testTag("home_load_sample_button")
-                        ) {
-                            Text("Load sample workouts", color = palette.brandInk)
-                        }
                     }
                 }
             }
         } else {
-            items(uiState.sessions.take(3), key = { it.id }) { session ->
+            items(clubbedSessions.take(3), key = { it.session.dateIso }) { club ->
+                val session = club.session
                 SessionSummaryCard(
                     session = session,
                     bodyWeightKg = uiState.profile.bodyWeightKg,
                     prCount = countSessionPrs(session, uiState.sessions),
+                    allExercises = uiState.allExercises,
                     onClick = { onOpenHistory(session.id) },
                     modifier = Modifier.testTag("home_recent_session_${session.id}")
                 )

@@ -156,14 +156,10 @@ class WorkoutRepository(
     }.toList().ifEmpty { listOf("chest") }
 
     suspend fun saveCompletedDraft(draft: ActiveDraft): Long {
-        val durationMins = (draft.elapsedSeconds / 60).coerceAtLeast(1)
-        val sessionEntity = WorkoutSessionEntity(
-            dateIso = draft.dateIso,
-            groupsCsv = draft.groups.joinToString(","),
-            durationMinutes = durationMins,
-            note = draft.sessionNote.trim()
-        )
-        val exPairs = draft.exercises.mapIndexed { idx, ex ->
+        val newDurationMins = draft.manualDurationMinutes?.coerceAtLeast(0)
+            ?: (draft.elapsedSeconds / 60).coerceAtLeast(0)
+
+        val newExPairs = draft.exercises.mapIndexed { idx, ex ->
             val entity = LoggedExerciseEntity(
                 sessionId = 0,
                 orderIndex = idx,
@@ -183,11 +179,82 @@ class WorkoutRepository(
             }
             entity to setEntities
         }
-        return dao.insertFullSession(sessionEntity, exPairs)
+
+        if (draft.editingSessionIds.isNotEmpty()) {
+            val sessionEntity = WorkoutSessionEntity(
+                dateIso = draft.dateIso,
+                groupsCsv = draft.groups.joinToString(","),
+                durationMinutes = newDurationMins,
+                note = draft.sessionNote.trim()
+            )
+            return dao.replaceSessionsByIds(draft.editingSessionIds, sessionEntity, newExPairs)
+        }
+
+        val sameDateSessions = dao.getSessionsByDate(draft.dateIso)
+        if (sameDateSessions.isNotEmpty()) {
+            val existingGroups = sameDateSessions.flatMap {
+                it.session.groupsCsv.split(",").map { g -> g.trim() }.filter { g -> g.isNotEmpty() }
+            }
+            val mergedGroups = (existingGroups + draft.groups).distinct()
+            val mergedDuration = sameDateSessions.sumOf { it.session.durationMinutes.coerceAtLeast(0) } + newDurationMins
+            val mergedNote = (sameDateSessions.map { it.session.note.trim() } + draft.sessionNote.trim())
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .joinToString(" · ")
+
+            val existingExPairs = sameDateSessions.flatMap { sw ->
+                sw.exercises.sortedBy { it.exercise.orderIndex }.map { exWithSets ->
+                    val exEntity = LoggedExerciseEntity(
+                        sessionId = 0,
+                        orderIndex = 0,
+                        name = exWithSets.exercise.name,
+                        equipment = exWithSets.exercise.equipment,
+                        rpeName = exWithSets.exercise.rpeName,
+                        note = exWithSets.exercise.note
+                    )
+                    val setEntities = exWithSets.sets.sortedBy { it.setIndex }.map { st ->
+                        LoggedSetEntity(
+                            loggedExerciseId = 0,
+                            setIndex = st.setIndex,
+                            reps = st.reps,
+                            weightKg = st.weightKg,
+                            isCompleted = st.isCompleted
+                        )
+                    }
+                    exEntity to setEntities
+                }
+            }
+
+            val mergedSession = WorkoutSessionEntity(
+                dateIso = draft.dateIso,
+                groupsCsv = mergedGroups.joinToString(","),
+                durationMinutes = mergedDuration,
+                note = mergedNote
+            )
+            return dao.replaceSessionsByIds(
+                idsToDelete = sameDateSessions.map { it.session.id },
+                session = mergedSession,
+                exercisesWithSets = existingExPairs + newExPairs
+            )
+        }
+
+        val sessionEntity = WorkoutSessionEntity(
+            dateIso = draft.dateIso,
+            groupsCsv = draft.groups.joinToString(","),
+            durationMinutes = newDurationMins,
+            note = draft.sessionNote.trim()
+        )
+        return dao.insertFullSession(sessionEntity, newExPairs)
     }
 
     suspend fun deleteSession(sessionId: Long) {
         dao.deleteSessionById(sessionId)
+    }
+
+    suspend fun deleteSessions(sessionIds: List<Long>) {
+        if (sessionIds.isNotEmpty()) {
+            dao.deleteSessionsByIds(sessionIds)
+        }
     }
 
     suspend fun seedSampleData() {
@@ -215,7 +282,7 @@ class WorkoutRepository(
             val entity = WorkoutSessionEntity(
                 dateIso = s.date,
                 groupsCsv = s.groups.joinToString(","),
-                durationMinutes = s.mins.coerceAtLeast(1),
+                durationMinutes = s.mins.coerceAtLeast(0),
                 note = s.note
             )
             val exList = s.ex.mapIndexed { idx, ex ->
@@ -272,6 +339,7 @@ class WorkoutRepository(
                     bodyFatPercent = profile.bf,
                     experienceLevel = profile.level,
                     preferredSplit = profile.split,
+                    weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 ),
                 waistCm = payload.measures.waist,
@@ -294,6 +362,7 @@ class WorkoutRepository(
                     bodyFatPercent = profile.bf,
                     experienceLevel = profile.level,
                     preferredSplit = profile.split,
+                    weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 )
             )

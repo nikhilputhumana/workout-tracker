@@ -52,8 +52,8 @@ fun FoodPreviewScreen(
             .fillMaxSize()
             .background(palette.appBg)
             .testTag("food_preview_screen"),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             BorderedCard(
@@ -185,7 +185,7 @@ private fun PlannedMealRow(
             )
             Text(
                 text = subtitle,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = palette.muted
             )
         }

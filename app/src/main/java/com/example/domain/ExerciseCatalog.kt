@@ -18,11 +18,41 @@ object ExerciseCatalog {
         "Bar", "Dumbbell", "Machine", "Cable", "Bodyweight"
     )
 
+    val TRAINING_SPLITS = listOf(
+        SplitPreset(
+            name = "Push / Pull / Legs (PPL)",
+            groups = listOf("Push", "Pull", "Legs"),
+            description = "Push (chest, shoulders, triceps), Pull (back, biceps), Legs · 3–6 days/week"
+        ),
+        SplitPreset(
+            name = "Upper / Lower",
+            groups = listOf("Chest", "Back", "Shoulders", "Legs"),
+            description = "Alternate upper-body and lower-body strength days · 4 days/week"
+        ),
+        SplitPreset(
+            name = "Bro Split",
+            groups = listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps", "Legs"),
+            description = "One focus per day: Chest, Back, Shoulders, Arms, Legs · 5 days/week"
+        ),
+        SplitPreset(
+            name = "Full Body",
+            groups = listOf("Chest", "Back", "Legs", "Shoulders"),
+            description = "Train all major muscle groups each workout · 2–3 days/week"
+        ),
+        SplitPreset(
+            name = "I will choose this later",
+            groups = emptyList(),
+            description = "Skip split setup for now — pick any muscle groups when starting a workout"
+        )
+    )
+
     val SPLIT_PRESETS = listOf(
-        SplitPreset("Push", listOf("Push", "Chest", "Triceps"), "Chest, shoulders, triceps"),
-        SplitPreset("Pull", listOf("Pull", "Back", "Biceps"), "Back, biceps, rear delts"),
+        SplitPreset("Push", listOf("Push", "Chest", "Triceps"), "Chest, front & side delts, triceps"),
+        SplitPreset("Pull", listOf("Pull", "Back", "Biceps"), "Back, rear delts, biceps"),
+        SplitPreset("Legs", listOf("Legs"), "Quads, hamstrings, glutes, calves"),
         SplitPreset("Shoulders + abs", listOf("Shoulders", "Abs"), "Delts, traps, core"),
-        SplitPreset("Legs", listOf("Legs"), "Quads, hams, glutes, calves")
+        SplitPreset("Upper body", listOf("Chest", "Back", "Shoulders", "Biceps", "Triceps"), "Upper push & pull compounds"),
+        SplitPreset("Full body", listOf("Chest", "Back", "Legs", "Shoulders"), "Squat, press, hinge & row")
     )
 
     private fun ex(
@@ -100,14 +130,25 @@ object ExerciseCatalog {
         ex("Ab wheel rollout", "Abs", "Bodyweight", listOf("abs"), "roll wheel forward out and back core", bw = true),
         ex("Russian twist", "Abs", "Bodyweight", listOf("abs"), "sit twist side to side core", bw = true),
 
-        ex("Treadmill run", "Cardio", "Machine", listOf("heart", "quads"), "running machine belt run walk cardio", bw = true),
-        ex("Stationary bike", "Cardio", "Machine", listOf("heart", "quads"), "cycling bike pedal cardio", bw = true),
-        ex("Rowing machine", "Cardio", "Machine", listOf("heart", "back"), "rowing erg pull handle cardio", bw = true),
-        ex("Stair climber", "Cardio", "Machine", listOf("heart", "glutes"), "stepper climb stairs cardio", bw = true)
+        ex("Run", "Cardio", "Bodyweight", listOf("heart", "quads", "calves"), "normal run outdoor jog running track road cardio", bw = false),
+        ex("Walk", "Cardio", "Bodyweight", listOf("heart", "quads", "calves"), "normal walk walking brisk stroll outdoor cardio", bw = false),
+        ex("Treadmill run", "Cardio", "Machine", listOf("heart", "quads"), "running machine belt treadmill run jog cardio", bw = false),
+        ex("Stationary bike", "Cardio", "Machine", listOf("heart", "quads"), "cycling bike pedal cardio", bw = false),
+        ex("Rowing machine", "Cardio", "Machine", listOf("heart", "back"), "rowing erg pull handle cardio", bw = false),
+        ex("Stair climber", "Cardio", "Machine", listOf("heart", "glutes"), "stepper climb stairs cardio", bw = false)
     )
 
     fun findByName(name: String, custom: List<ExerciseDefinition> = emptyList()): ExerciseDefinition? {
         return (BUILT_IN_EXERCISES + custom).firstOrNull { it.name.equals(name, ignoreCase = true) }
+    }
+
+    fun isCardioExercise(name: String, allExercises: List<ExerciseDefinition> = BUILT_IN_EXERCISES): Boolean {
+        val def = findByName(name, allExercises.filter { it.isCustom })
+        if (def != null) return def.groups.any { it.equals("Cardio", ignoreCase = true) }
+        val lower = name.lowercase(Locale.US)
+        return lower.contains("run") || lower.contains("walk") || lower.contains("jog") ||
+            lower.contains("treadmill") || lower.contains("cycling") || lower.contains("cardio") ||
+            lower.contains("stair")
     }
 
     fun matchOffline(description: String, allExercises: List<ExerciseDefinition>): List<OfflineExerciseMatch> {
@@ -140,6 +181,11 @@ object ExerciseCatalog {
         }
     }
 }
+
+data class ClubbedSession(
+    val session: WorkoutSession,
+    val sourceIds: List<Long>
+)
 
 object WorkoutMath {
     private val utcTz: TimeZone = TimeZone.getTimeZone("UTC")
@@ -228,18 +274,29 @@ object WorkoutMath {
         }
     }
 
-    fun exerciseVolume(ex: LoggedExercise): Double =
-        ex.sets.sumOf { it.reps * it.weightKg }
+    fun exerciseVolume(
+        ex: LoggedExercise,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): Double {
+        if (ExerciseCatalog.isCardioExercise(ex.name, allExercises)) return 0.0
+        return ex.sets.sumOf { it.reps * it.weightKg }
+    }
 
-    fun sessionVolume(session: WorkoutSession): Double =
-        session.exercises.sumOf { exerciseVolume(it) }
+    fun sessionVolume(
+        session: WorkoutSession,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): Double = session.exercises.sumOf { exerciseVolume(it, allExercises) }
 
     fun sessionSets(session: WorkoutSession): Int =
         session.exercises.sumOf { it.sets.size }
 
-    fun draftVolume(draft: ActiveDraft): Double =
+    fun draftVolume(
+        draft: ActiveDraft,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): Double =
         draft.exercises.sumOf { ex ->
-            ex.sets.sumOf { st ->
+            if (ExerciseCatalog.isCardioExercise(ex.name, allExercises)) 0.0
+            else ex.sets.sumOf { st ->
                 val r = st.repsText.toIntOrNull() ?: 0
                 val w = st.weightText.toDoubleOrNull() ?: 0.0
                 r * w
@@ -256,11 +313,108 @@ object WorkoutMath {
     fun formatKg(kg: Double): String =
         if (kg % 1.0 == 0.0) "${kg.toInt()}" else String.format(Locale.US, "%.1f", kg)
 
+    fun estimateCardioCalories(
+        exerciseName: String,
+        minutes: Int,
+        distanceKm: Double,
+        bodyWeightKg: Double
+    ): Double {
+        val weight = if (bodyWeightKg > 20.0) bodyWeightKg else 74.5
+        val lower = exerciseName.lowercase(Locale.US)
+        val isWalk = lower.contains("walk")
+        val isRun = lower.contains("run") || lower.contains("jog")
+
+        if (distanceKm > 0.0) {
+            val speedKmh = if (minutes > 0) distanceKm / (minutes / 60.0) else if (isWalk) 5.0 else 9.0
+            val factor = when {
+                isWalk || (!isRun && speedKmh < 6.4) -> 0.75
+                else -> 1.036
+            }
+            return factor * weight * distanceKm
+        }
+        if (minutes > 0) {
+            val met = when {
+                isWalk -> 3.8
+                isRun -> 8.5
+                else -> 7.0
+            }
+            return met * 3.5 * weight / 200.0 * minutes
+        }
+        return 0.0
+    }
+
+    fun estimateSessionCalories(
+        session: WorkoutSession,
+        bodyWeightKg: Double,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): Int {
+        val weight = if (bodyWeightKg > 20.0) bodyWeightKg else 74.5
+        var cardioKcal = 0.0
+        var cardioMinutes = 0
+        var strengthSets = 0
+
+        for (ex in session.exercises) {
+            if (ExerciseCatalog.isCardioExercise(ex.name, allExercises)) {
+                for (s in ex.sets) {
+                    cardioMinutes += s.reps.coerceAtLeast(0)
+                    cardioKcal += estimateCardioCalories(ex.name, s.reps, s.weightKg, weight)
+                }
+            } else {
+                strengthSets += ex.sets.size
+            }
+        }
+
+        val strengthKcal = if (strengthSets > 0) {
+            val remainingMins = (session.durationMinutes - cardioMinutes).coerceAtLeast(0)
+            if (remainingMins > 0) {
+                5.0 * 3.5 * weight / 200.0 * remainingMins
+            } else {
+                // Estimate from working sets when session duration was not timed
+                strengthSets * 4.0 * (weight / 70.0)
+            }
+        } else if (cardioKcal <= 0.0 && session.durationMinutes > 0) {
+            estimateCalories(session.groups, session.durationMinutes, weight).toDouble()
+        } else {
+            0.0
+        }
+
+        return (cardioKcal + strengthKcal).roundToInt()
+    }
+
+    fun estimateDraftCalories(
+        draft: ActiveDraft,
+        bodyWeightKg: Double,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): Int {
+        val syntheticSession = WorkoutSession(
+            dateIso = draft.dateIso,
+            groups = draft.groups,
+            durationMinutes = draft.manualDurationMinutes ?: (draft.elapsedSeconds / 60),
+            note = draft.sessionNote,
+            exercises = draft.exercises.map { ex ->
+                LoggedExercise(
+                    name = ex.name,
+                    equipment = ex.equipment,
+                    sets = ex.sets.map { s ->
+                        LoggedSet(
+                            reps = s.repsText.toIntOrNull() ?: 0,
+                            weightKg = s.weightText.toDoubleOrNull() ?: 0.0,
+                            isCompleted = s.isCompleted
+                        )
+                    },
+                    rpe = ex.rpe,
+                    note = ex.note
+                )
+            }
+        )
+        return estimateSessionCalories(syntheticSession, bodyWeightKg, allExercises)
+    }
+
     fun estimateCalories(groups: List<String>, durationMins: Int, bodyWeightKg: Double): Int {
+        if (durationMins <= 0) return 0
         val met = if (groups.any { it.equals("Cardio", ignoreCase = true) }) 7.5 else 5.0
         val weight = if (bodyWeightKg > 20.0) bodyWeightKg else 74.5
-        val mins = durationMins.coerceAtLeast(1)
-        return (met * 3.5 * weight / 200.0 * mins).roundToInt()
+        return (met * 3.5 * weight / 200.0 * durationMins).roundToInt()
     }
 
     fun epley1Rm(reps: Int, kg: Double): Double =
@@ -269,7 +423,18 @@ object WorkoutMath {
     fun bestSet(ex: LoggedExercise): LoggedSet? =
         ex.sets.maxByOrNull { epley1Rm(it.reps, it.weightKg) }
 
-    fun formatSetSummary(ex: LoggedExercise): String {
+    fun formatSetSummary(
+        ex: LoggedExercise,
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+    ): String {
+        val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allExercises)
+        if (isCardio) {
+            return ex.sets.joinToString(", ") { s ->
+                val minsPart = if (s.reps > 0) "${s.reps} min" else ""
+                val distPart = if (s.weightKg > 0.0) "${formatKg(s.weightKg)} km" else ""
+                listOf(minsPart, distPart).filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "logged" }
+            }
+        }
         val grouped = linkedMapOf<Pair<Int, Double>, Int>()
         for (s in ex.sets) {
             val key = s.reps to s.weightKg
@@ -279,6 +444,59 @@ object WorkoutMath {
             val (reps, kg) = key
             val wLabel = if (kg > 0.0) " @ ${formatKg(kg)} kg" else " bw"
             "${count}×$reps$wLabel"
+        }
+    }
+
+    fun primaryMuscleGroupForStats(
+        ex: LoggedExercise,
+        session: WorkoutSession,
+        allExercises: List<ExerciseDefinition>
+    ): String {
+        val def = ExerciseCatalog.findByName(ex.name, allExercises)
+        val raw = def?.groups?.firstOrNull {
+            !it.equals("Push", ignoreCase = true) && !it.equals("Pull", ignoreCase = true)
+        } ?: def?.groups?.firstOrNull()
+        ?: session.groups.firstOrNull {
+            !it.equals("Push", ignoreCase = true) && !it.equals("Pull", ignoreCase = true)
+        }
+        ?: session.groups.firstOrNull()
+        ?: "Other"
+
+        return when {
+            raw.equals("Push", ignoreCase = true) -> "Chest"
+            raw.equals("Pull", ignoreCase = true) -> "Back"
+            else -> raw
+        }
+    }
+
+    fun clubSessionsByDate(sessions: List<WorkoutSession>): List<ClubbedSession> {
+        if (sessions.isEmpty()) return emptyList()
+        val byDate = linkedMapOf<String, MutableList<WorkoutSession>>()
+        sessions.sortedByDescending { it.dateIso }.forEach { s ->
+            byDate.getOrPut(s.dateIso) { mutableListOf() }.add(s)
+        }
+        return byDate.values.map { dayList ->
+            if (dayList.size == 1) {
+                val single = dayList.first()
+                ClubbedSession(single, listOf(single.id))
+            } else {
+                val mergedGroups = dayList.flatMap { it.groups }.distinct()
+                val mergedMins = dayList.sumOf { it.durationMinutes.coerceAtLeast(0) }
+                val mergedNotes = dayList.map { it.note.trim() }.filter { it.isNotEmpty() }.distinct().joinToString(" · ")
+                val mergedExercises = dayList.asReversed().flatMap { it.exercises }
+                val primaryId = dayList.first().id
+                ClubbedSession(
+                    session = WorkoutSession(
+                        id = primaryId,
+                        dateIso = dayList.first().dateIso,
+                        groups = mergedGroups,
+                        durationMinutes = mergedMins,
+                        note = mergedNotes,
+                        exercises = mergedExercises
+                    ),
+                    sourceIds = dayList.map { it.id }
+                )
+            }
         }
     }
 

@@ -80,8 +80,8 @@ fun NewWorkoutScreen(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             BorderedCard(
                 onClick = openDatePicker,
@@ -254,13 +254,13 @@ fun NewWorkoutScreen(
                                 }
                                 Text(
                                     text = group,
-                                    fontSize = 13.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = if (isSelected) gpColor.fg else palette.text2
                                 )
                                 Text(
                                     text = tag,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = (if (isSelected) gpColor.fg else palette.text2).copy(alpha = 0.65f)
                                 )

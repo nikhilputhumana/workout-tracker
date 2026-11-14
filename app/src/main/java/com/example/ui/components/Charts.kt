@@ -63,8 +63,8 @@ fun VolumeBarChart(
             ) {
                 Text(
                     text = if (bar.value > 0f) bar.topLabel else "",
-                    fontSize = 9.sp,
-                    lineHeight = 12.sp,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (bar.isHighlighted) palette.figHighlight else palette.faint,
                     maxLines = 1
@@ -86,7 +86,7 @@ fun VolumeBarChart(
                 }
                 Text(
                     text = bar.label,
-                    fontSize = 9.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
                     letterSpacing = 0.4.sp,
                     color = palette.faint,
@@ -177,7 +177,7 @@ fun TrendLineChart(
         ) {
             Text(
                 text = points.first().label,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = palette.faint
             )
@@ -185,13 +185,13 @@ fun TrendLineChart(
             val valText = if (latest.value % 1f == 0f) "${latest.value.toInt()}" else String.format(java.util.Locale.US, "%.1f", latest.value)
             Text(
                 text = "$valText${latest.unit}",
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = palette.text
             )
             Text(
                 text = points.last().label,
-                fontSize = 10.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 color = palette.faint
             )

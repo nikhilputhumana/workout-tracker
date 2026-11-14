@@ -26,10 +26,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -68,35 +70,42 @@ fun HistoryScreen(
     initialExpandedId: Long? = null,
     sessionsMatchingGroups: (List<String>) -> List<WorkoutSession>,
     onOpenExerciseDetail: (String) -> Unit,
-    onDeleteSession: (Long) -> Unit,
+    onEditSession: (WorkoutSession, List<Long>) -> Unit,
+    onDeleteSessions: (List<Long>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
     var selectedFilter by remember { mutableStateOf("All") }
-    var expandedIds by remember(initialExpandedId) {
-        mutableStateOf(if (initialExpandedId != null) setOf(initialExpandedId) else emptySet())
+    var expandedDates by remember(initialExpandedId, sessions) {
+        val targetDate = initialExpandedId?.let { id ->
+            sessions.firstOrNull { it.id == id }?.dateIso
+        }
+        mutableStateOf(if (targetDate != null) setOf(targetDate) else emptySet())
     }
-    var pendingDeleteId by remember { mutableStateOf<Long?>(null) }
+    var pendingDeleteIds by remember { mutableStateOf<List<Long>?>(null) }
 
     val filterChips = listOf("All") + ExerciseCatalog.MUSCLE_GROUPS
     val filteredSessions = remember(selectedFilter, sessions) {
         if (selectedFilter == "All") sessions
         else sessionsMatchingGroups(listOf(selectedFilter))
     }
+    val clubbedSessions = remember(filteredSessions) {
+        WorkoutMath.clubSessionsByDate(filteredSessions)
+    }
 
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 filterChips.forEach { chip ->
                     val selected = selectedFilter == chip
@@ -108,18 +117,18 @@ fun HistoryScreen(
                             if (selected) palette.brand else palette.borderStrong
                         ),
                         modifier = Modifier
-                            .heightIn(min = 36.dp)
+                            .heightIn(min = 38.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .clickable { selectedFilter = chip }
                             .testTag("history_filter_${chip.lowercase()}")
                     ) {
                         Box(
                             contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = chip,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (selected) palette.brandInk else palette.text2
                             )
@@ -131,7 +140,7 @@ fun HistoryScreen(
 
         item {
             Text(
-                text = "${filteredSessions.size} workout${if (filteredSessions.size == 1) "" else "s"}" +
+                text = "${clubbedSessions.size} workout${if (clubbedSessions.size == 1) "" else "s"}" +
                     if (selectedFilter == "All") "" else " · $selectedFilter",
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
@@ -139,7 +148,7 @@ fun HistoryScreen(
             )
         }
 
-        if (filteredSessions.isEmpty()) {
+        if (clubbedSessions.isEmpty()) {
             item {
                 BorderedCard {
                     Column(
@@ -157,16 +166,14 @@ fun HistoryScreen(
                 }
             }
         } else {
-            items(filteredSessions, key = { it.id }) { session ->
-                val isOpen = session.id in expandedIds
+            items(clubbedSessions, key = { it.session.dateIso }) { club ->
+                val session = club.session
+                val sourceIds = club.sourceIds
+                val isOpen = session.dateIso in expandedDates
                 val prCount = countSessionPrs(session, sessions)
-                val vol = WorkoutMath.sessionVolume(session)
+                val vol = WorkoutMath.sessionVolume(session, allExercises)
                 val sets = WorkoutMath.sessionSets(session)
-                val kcal = WorkoutMath.estimateCalories(
-                    session.groups,
-                    session.durationMinutes,
-                    bodyWeightKg
-                )
+                val kcal = WorkoutMath.estimateSessionCalories(session, bodyWeightKg, allExercises)
 
                 BorderedCard(
                     modifier = Modifier.animateContentSize()
@@ -176,12 +183,12 @@ fun HistoryScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable {
-                                    expandedIds = if (isOpen) expandedIds - session.id
-                                    else expandedIds + session.id
+                                    expandedDates = if (isOpen) expandedDates - session.dateIso
+                                    else expandedDates + session.dateIso
                                 }
-                                .padding(horizontal = 14.dp, vertical = 12.dp)
+                                .padding(horizontal = 14.dp, vertical = 14.dp)
                                 .testTag("history_session_${session.id}"),
-                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -200,26 +207,61 @@ fun HistoryScreen(
                                     color = palette.faint
                                 )
                                 Spacer(Modifier.weight(1f))
-                                Text(
-                                    text = "${session.durationMinutes} min",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Medium,
-                                    color = palette.muted
-                                )
-                                Spacer(Modifier.width(4.dp))
+                                if (session.durationMinutes > 0) {
+                                    Text(
+                                        text = "${session.durationMinutes} min",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = palette.muted
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                }
+                                IconButton(
+                                    onClick = { onEditSession(session, sourceIds) },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("history_edit_icon_${session.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = "Edit workout",
+                                        tint = palette.brandInk,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { pendingDeleteIds = sourceIds },
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .testTag("history_delete_icon_${session.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.DeleteOutline,
+                                        contentDescription = "Delete workout",
+                                        tint = palette.redInk,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
                                 Icon(
                                     imageVector = if (isOpen) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                                     contentDescription = if (isOpen) "Collapse" else "Expand",
                                     tint = palette.faint,
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
 
                             FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
                                 session.groups.forEach { MuscleGroupTag(it) }
+                                if (sourceIds.size > 1) {
+                                    StatusBadge(
+                                        label = "${sourceIds.size} clubbed",
+                                        bg = palette.brandSoft,
+                                        fg = palette.brandInk
+                                    )
+                                }
                                 if (prCount > 0) {
                                     StatusBadge(
                                         label = "$prCount PR",
@@ -230,24 +272,28 @@ fun HistoryScreen(
                             }
 
                             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                                Text(
-                                    text = "${WorkoutMath.formatVolume(vol)} lifted",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = palette.text2
-                                )
+                                if (vol > 0.0) {
+                                    Text(
+                                        text = "${WorkoutMath.formatVolume(vol)} lifted",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = palette.text2
+                                    )
+                                }
                                 Text(
                                     text = "$sets sets",
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = palette.text2
                                 )
-                                Text(
-                                    text = "~$kcal kcal",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = palette.text2
-                                )
+                                if (kcal > 0) {
+                                    Text(
+                                        text = "~$kcal kcal",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = palette.text2
+                                    )
+                                }
                             }
                         }
 
@@ -261,6 +307,8 @@ fun HistoryScreen(
 
                             session.exercises.forEach { ex ->
                                 val def = ExerciseCatalog.findByName(ex.name, allExercises)
+                                val isCardio = ExerciseCatalog.isCardioExercise(ex.name, allExercises)
+                                val exVol = WorkoutMath.exerciseVolume(ex, allExercises)
                                 val rpeLabel = when (ex.rpe) {
                                     RpeRating.EASY -> "easy"
                                     RpeRating.RIGHT -> "just right"
@@ -271,14 +319,14 @@ fun HistoryScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .clickable { onOpenExerciseDetail(ex.name) }
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     MuscleFigureBox(
                                         regions = def?.regions ?: listOf("chest"),
-                                        width = 30.dp,
-                                        height = 40.dp
+                                        width = 32.dp,
+                                        height = 42.dp
                                     )
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
@@ -291,24 +339,26 @@ fun HistoryScreen(
                                         )
                                         Text(
                                             text = "${ex.equipment} · $rpeLabel",
-                                            fontSize = 11.sp,
+                                            fontSize = 12.sp,
                                             color = palette.faint
                                         )
                                     }
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text(
-                                            text = WorkoutMath.formatSetSummary(ex),
+                                            text = WorkoutMath.formatSetSummary(ex, allExercises),
                                             style = MaterialTheme.typography.bodyMedium.copy(
                                                 fontFeatureSettings = "tnum"
                                             ),
                                             fontWeight = FontWeight.SemiBold,
                                             color = palette.text
                                         )
-                                        Text(
-                                            text = WorkoutMath.formatVolume(WorkoutMath.exerciseVolume(ex)),
-                                            fontSize = 11.sp,
-                                            color = palette.faint
-                                        )
+                                        if (!isCardio && exVol > 0.0) {
+                                            Text(
+                                                text = WorkoutMath.formatVolume(exVol),
+                                                fontSize = 12.sp,
+                                                color = palette.faint
+                                            )
+                                        }
                                     }
                                 }
                                 Box(
@@ -335,12 +385,36 @@ fun HistoryScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .background(palette.appBg)
-                                    .padding(horizontal = 8.dp, vertical = 2.dp),
-                                horizontalArrangement = Arrangement.End
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TextButton(
-                                    onClick = { pendingDeleteId = session.id },
-                                    modifier = Modifier.testTag("history_delete_${session.id}")
+                                    onClick = { onEditSession(session, sourceIds) },
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .testTag("history_edit_${session.id}")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Edit,
+                                        contentDescription = "Edit workout",
+                                        tint = palette.brandInk,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "Edit workout",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = palette.brandInk
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                                TextButton(
+                                    onClick = { pendingDeleteIds = sourceIds },
+                                    modifier = Modifier
+                                        .heightIn(min = 48.dp)
+                                        .testTag("history_delete_${session.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.DeleteOutline,
@@ -351,7 +425,8 @@ fun HistoryScreen(
                                     Spacer(Modifier.width(4.dp))
                                     Text(
                                         text = "Delete workout",
-                                        fontSize = 12.sp,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
                                         color = palette.redInk
                                     )
                                 }
@@ -363,23 +438,23 @@ fun HistoryScreen(
         }
     }
 
-    if (pendingDeleteId != null) {
+    if (pendingDeleteIds != null) {
         AlertDialog(
-            onDismissRequest = { pendingDeleteId = null },
+            onDismissRequest = { pendingDeleteIds = null },
             title = { Text("Delete workout?") },
             text = { Text("This removes the logged session from your device history.") },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        pendingDeleteId?.let(onDeleteSession)
-                        pendingDeleteId = null
+                        pendingDeleteIds?.let(onDeleteSessions)
+                        pendingDeleteIds = null
                     }
                 ) {
                     Text("Delete", color = palette.redInk)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDeleteId = null }) {
+                TextButton(onClick = { pendingDeleteIds = null }) {
                     Text("Cancel")
                 }
             }

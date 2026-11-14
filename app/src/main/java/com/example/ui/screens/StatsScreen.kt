@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,15 +16,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -38,7 +46,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.domain.ExerciseCatalog
 import com.example.domain.LoggedExercise
 import com.example.domain.WorkoutMath
 import com.example.ui.components.BorderedCard
@@ -62,16 +69,31 @@ fun StatsScreen(
 ) {
     val palette = LocalWorkoutPalette.current
     var newWeightText by remember { mutableStateOf("") }
+    var liftedShowLast by remember { mutableStateOf(false) }
+    var caloriesShowLast by remember { mutableStateOf(false) }
     val todayIso = WorkoutMath.todayIso()
 
-    val allVol = uiState.sessions.sumOf { WorkoutMath.sessionVolume(it) }
-    val allKcal = uiState.sessions.sumOf {
-        WorkoutMath.estimateCalories(it.groups, it.durationMinutes, uiState.profile.bodyWeightKg)
+    val clubbed = remember(uiState.sessions) {
+        WorkoutMath.clubSessionsByDate(uiState.sessions)
     }
-    val avgMins = if (uiState.sessions.isEmpty()) 0
-    else uiState.sessions.sumOf { it.durationMinutes } / uiState.sessions.size
-    val avgSets = if (uiState.sessions.isEmpty()) 0
-    else uiState.sessions.sumOf { WorkoutMath.sessionSets(it) } / uiState.sessions.size
+    val clubbedSessions = clubbed.map { it.session }
+    val latestSession = clubbedSessions.firstOrNull()
+
+    val allVol = clubbedSessions.sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
+    val lastVol = latestSession?.let { WorkoutMath.sessionVolume(it, uiState.allExercises) } ?: 0.0
+
+    val allKcal = clubbedSessions.sumOf {
+        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+    }
+    val lastKcal = latestSession?.let {
+        WorkoutMath.estimateSessionCalories(it, uiState.profile.bodyWeightKg, uiState.allExercises)
+    } ?: 0
+
+    val timedSessions = clubbedSessions.filter { it.durationMinutes > 0 }
+    val avgMins: Int? = if (timedSessions.isEmpty()) null
+    else timedSessions.sumOf { it.durationMinutes } / timedSessions.size
+    val avgSets = if (clubbedSessions.isEmpty()) 0
+    else clubbedSessions.sumOf { WorkoutMath.sessionSets(it) } / clubbedSessions.size
 
     val bwLog = uiState.bodyWeightLog
     val latestBw = bwLog.lastOrNull()?.weightKg ?: uiState.profile.bodyWeightKg
@@ -81,9 +103,9 @@ fun StatsScreen(
     val bars = (5 downTo 0).map { weekBack ->
         val endIso = WorkoutMath.isoOffsetDays(-weekBack * 7, todayIso)
         val startIso = WorkoutMath.isoOffsetDays(-6, endIso)
-        val vol = uiState.sessions
+        val vol = clubbedSessions
             .filter { it.dateIso in startIso..endIso }
-            .sumOf { WorkoutMath.sessionVolume(it) }
+            .sumOf { WorkoutMath.sessionVolume(it, uiState.allExercises) }
         VolumeBarPoint(
             label = WorkoutMath.shortWeekBucketLabel(startIso),
             topLabel = String.format(Locale.US, "%.1f", vol / 1000.0),
@@ -126,12 +148,11 @@ fun StatsScreen(
 
     val fourWeeksAgoIso = WorkoutMath.isoOffsetDays(-28, todayIso)
     val setsByGroup = mutableMapOf<String, Int>()
-    uiState.sessions
+    clubbedSessions
         .filter { it.dateIso >= fourWeeksAgoIso }
         .forEach { session ->
             session.exercises.forEach { ex ->
-                val def = ExerciseCatalog.findByName(ex.name, uiState.allExercises)
-                val primary = def?.groups?.firstOrNull() ?: session.groups.firstOrNull() ?: "Other"
+                val primary = WorkoutMath.primaryMuscleGroupForStats(ex, session, uiState.allExercises)
                 setsByGroup[primary] = (setsByGroup[primary] ?: 0) + ex.sets.size
             }
         }
@@ -142,8 +163,8 @@ fun StatsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -152,26 +173,87 @@ fun StatsScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     KpiTile(
-                        label = "Total lifted",
-                        value = String.format(Locale.US, "%.1f t", allVol / 1000.0),
-                        sub = "across ${uiState.sessions.size} workouts",
+                        label = if (liftedShowLast) "Last lifted" else "Total lifted",
+                        value = if (liftedShowLast) {
+                            WorkoutMath.formatVolume(lastVol)
+                        } else {
+                            String.format(Locale.US, "%.1f t", allVol / 1000.0)
+                        },
+                        sub = if (liftedShowLast) {
+                            latestSession?.let { WorkoutMath.formatShort(it.dateIso) } ?: "no workout yet"
+                        } else {
+                            "across ${clubbedSessions.size} workouts"
+                        },
+                        trailingHeader = {
+                            ModeTogglePill(
+                                isLast = liftedShowLast,
+                                onToggle = { liftedShowLast = !liftedShowLast },
+                                modifier = Modifier.testTag("stats_volume_toggle")
+                            )
+                        },
                         modifier = Modifier.weight(1f)
                     )
                     KpiTile(
                         label = "Calories burnt",
-                        value = if (allKcal > 0) "$allKcal" else "—",
-                        sub = "estimated, all time",
+                        value = if (caloriesShowLast) {
+                            if (lastKcal > 0) "$lastKcal" else "—"
+                        } else {
+                            if (allKcal > 0) "$allKcal" else "—"
+                        },
+                        sub = if (caloriesShowLast) {
+                            latestSession?.let { "est. · ${WorkoutMath.formatShort(it.dateIso)}" } ?: "estimated"
+                        } else {
+                            "estimated, all time"
+                        },
+                        trailingHeader = {
+                            ModeTogglePill(
+                                isLast = caloriesShowLast,
+                                onToggle = { caloriesShowLast = !caloriesShowLast },
+                                modifier = Modifier.testTag("stats_calories_toggle")
+                            )
+                        },
                         modifier = Modifier.weight(1f)
                     )
                 }
+
+                // Prominent Warning Banner for Calorie Estimates
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(palette.orangeSoft)
+                        .border(1.dp, palette.orange.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .testTag("stats_calorie_warning_banner"),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.WarningAmber,
+                        contentDescription = "Warning",
+                        tint = palette.orangeInk,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Calorie figures are estimates only and not final — based on duration, distance, sets, and body weight.",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                        color = palette.orangeInk
+                    )
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     KpiTile(
                         label = "Avg session",
-                        value = if (avgMins > 0) "$avgMins min" else "—",
-                        sub = if (avgSets > 0) "$avgSets sets typical" else "no sessions yet",
+                        value = avgMins?.let { "$it min" } ?: "",
+                        sub = when {
+                            clubbedSessions.isEmpty() -> "no sessions yet"
+                            avgMins == null -> "duration not logged · $avgSets sets typical"
+                            else -> "$avgSets sets typical"
+                        },
                         modifier = Modifier.weight(1f)
                     )
                     KpiTile(
@@ -197,7 +279,7 @@ fun StatsScreen(
                         SectionLabel("Volume lifted · per 7 days")
                         Text(
                             text = "tonnes",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
                             color = palette.faint
                         )
@@ -222,7 +304,7 @@ fun StatsScreen(
                         if (bwLog.size >= 2) {
                             Text(
                                 text = bwDeltaStr,
-                                fontSize = 11.sp,
+                                fontSize = 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = if (bwDelta < 0) palette.greenInk else palette.muted
                             )
@@ -290,7 +372,7 @@ fun StatsScreen(
             BorderedCard {
                 Column(
                     modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     SectionLabel("Strength change")
                     Text(
@@ -330,7 +412,7 @@ fun StatsScreen(
                                     )
                                     Text(
                                         text = fromTo,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = palette.faint
                                     )
                                 }
@@ -351,11 +433,11 @@ fun StatsScreen(
                                 }
                                 Text(
                                     text = "${if (pct >= 0) "+" else ""}${String.format(Locale.US, "%.1f", pct)}%",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = textColor,
                                     textAlign = TextAlign.End,
-                                    modifier = Modifier.width(54.dp)
+                                    modifier = Modifier.width(56.dp)
                                 )
                             }
                         }
@@ -388,10 +470,10 @@ fun StatsScreen(
                             ) {
                                 Text(
                                     text = group,
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = palette.text2,
-                                    modifier = Modifier.width(74.dp)
+                                    modifier = Modifier.width(78.dp)
                                 )
                                 Box(
                                     modifier = Modifier
@@ -410,17 +492,17 @@ fun StatsScreen(
                                 }
                                 Text(
                                     text = "$count",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = palette.text,
                                     textAlign = TextAlign.End,
-                                    modifier = Modifier.width(36.dp)
+                                    modifier = Modifier.width(38.dp)
                                 )
                             }
                         }
                         Text(
                             text = "Aim for 10–20 hard sets per muscle group per week. ${sortedGroups.last().key} is your lightest right now.",
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = palette.faint
                         )
                     }
@@ -429,5 +511,30 @@ fun StatsScreen(
         }
 
         item { Spacer(Modifier.height(6.dp)) }
+    }
+}
+
+@Composable
+private fun ModeTogglePill(
+    isLast: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalWorkoutPalette.current
+    Surface(
+        shape = RoundedCornerShape(4.dp),
+        color = palette.brandSoft,
+        border = BorderStroke(1.dp, palette.brandBd),
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onToggle)
+    ) {
+        Text(
+            text = if (isLast) "Last" else "Total",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = palette.brandInk,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
     }
 }

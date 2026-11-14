@@ -26,15 +26,16 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,7 +67,8 @@ fun OnboardingScreen(
     initialNextFeeIso: String,
     startStep: Int = 1,
     isEditOnly: Boolean = false,
-    onComplete: (profile: UserProfile, nextFeeIso: String, loadSampleData: Boolean) -> Unit,
+    onComplete: (profile: UserProfile, nextFeeIso: String) -> Unit,
+    onImportLog: (profile: UserProfile, nextFeeIso: String) -> Unit = { _, _ -> },
     onCancelEdit: (() -> Unit)? = null
 ) {
     val palette = LocalWorkoutPalette.current
@@ -78,11 +80,18 @@ fun OnboardingScreen(
     var bfText by remember { mutableStateOf(initialProfile.bodyFatPercent?.let { WorkoutMath.formatKg(it) } ?: "") }
     var gender by remember { mutableStateOf(initialProfile.gender) }
     var level by remember { mutableStateOf(initialProfile.experienceLevel) }
-    var split by remember { mutableStateOf(initialProfile.preferredSplit) }
+    var split by remember {
+        mutableStateOf(
+            if (ExerciseCatalog.TRAINING_SPLITS.any { it.name == initialProfile.preferredSplit }) {
+                initialProfile.preferredSplit
+            } else {
+                ExerciseCatalog.TRAINING_SPLITS.first().name
+            }
+        )
+    }
     var nextFeeIso by remember {
         mutableStateOf(initialNextFeeIso.ifBlank { WorkoutMath.isoOffsetMonths(1) })
     }
-    var loadSample by remember { mutableStateOf(false) }
 
     val openDatePicker = rememberDatePickerLauncher(nextFeeIso) { picked ->
         nextFeeIso = picked
@@ -97,6 +106,7 @@ fun OnboardingScreen(
         bodyFatPercent = bfText.toDoubleOrNull()?.coerceIn(3.0, 65.0),
         experienceLevel = level,
         preferredSplit = split,
+        weeklyTargetSessions = initialProfile.weeklyTargetSessions,
         onboardingComplete = true
     )
 
@@ -113,7 +123,7 @@ fun OnboardingScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(
@@ -147,7 +157,7 @@ fun OnboardingScreen(
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             if (!isEditOnly) {
                 Row(
@@ -184,37 +194,37 @@ fun OnboardingScreen(
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            text = "Every set, in one place.\nNot in your notes app.",
+                            text = "Every set, in one place.",
                             style = MaterialTheme.typography.headlineSmall,
                             color = palette.text
                         )
                         Text(
-                            text = "Your log stays on this device. Nothing is uploaded. Export a backup file whenever you want one.",
+                            text = "Private, offline workout log with JSON backup anytime.",
                             style = MaterialTheme.typography.bodyLarge,
                             color = palette.muted
                         )
                     }
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         FeatureRow(
                             icon = Icons.Filled.Schedule,
                             iconBg = palette.brandSoft,
                             iconTint = palette.brandInk,
-                            title = "Last time, on the same row",
-                            subtitle = "Each exercise shows the weight and reps you hit last session."
+                            title = "Previous numbers inline",
+                            subtitle = "See last session's reps, weight, or distance as you log."
                         )
                         FeatureRow(
                             icon = Icons.Filled.ArrowUpward,
                             iconBg = palette.greenSoft,
                             iconTint = palette.greenInk,
-                            title = "Overload, prompted",
-                            subtitle = "Rate a set Easy and the next session opens 2.5 kg heavier."
+                            title = "Overload prompts",
+                            subtitle = "Mark a lift Easy and next session suggests +2.5 kg."
                         )
                         FeatureRow(
                             icon = Icons.Filled.Star,
                             iconBg = palette.orangeSoft,
                             iconTint = palette.orangeInk,
-                            title = "Personal records, flagged live",
-                            subtitle = "Beat your best on a lift and the set is marked as you log it."
+                            title = "Live PR badges",
+                            subtitle = "New personal records are highlighted as you train."
                         )
                     }
                 }
@@ -227,7 +237,7 @@ fun OnboardingScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Used for calorie estimates and strength trends. Editable anytime in Settings.",
+                            text = "Used for calorie estimates and strength trends. Editable in Settings.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = palette.muted
                         )
@@ -327,24 +337,24 @@ fun OnboardingScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Drives the \"Suggested next\" card on Home. You can always train any muscle group.",
+                            text = "Choose how you structure your training week. You can change this or train any muscle group anytime.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = palette.muted
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ExerciseCatalog.SPLIT_PRESETS.forEach { preset ->
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ExerciseCatalog.TRAINING_SPLITS.forEach { preset ->
                             val selected = split == preset.name
                             BorderedCard(
                                 backgroundColor = if (selected) palette.brandSoft else palette.surface,
                                 borderColor = if (selected) palette.brand else palette.border,
                                 onClick = { split = preset.name },
-                                modifier = Modifier.testTag("split_option_${preset.name.lowercase()}")
+                                modifier = Modifier.testTag("split_option_${preset.name.lowercase().replace(' ', '_')}")
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 14.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp)
                                 ) {
                                     Text(
                                         text = preset.name,
@@ -377,7 +387,7 @@ fun OnboardingScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                                    .padding(horizontal = 12.dp, vertical = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -397,33 +407,47 @@ fun OnboardingScreen(
                     }
 
                     BorderedCard(
-                        modifier = Modifier.testTag("onboarding_sample_data_card")
+                        modifier = Modifier.testTag("onboarding_import_log_card")
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { loadSample = !loadSample }
-                                .padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Pre-load sample workout history",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = palette.text
+                            Text(
+                                text = "Import workout log",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.text
+                            )
+                            Text(
+                                text = "Bring in an existing Workout Tracker JSON file to restore your past sessions, sets, weights, and body-weight log immediately.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.muted
+                            )
+                            OutlinedButton(
+                                onClick = { onImportLog(buildProfile(), nextFeeIso) },
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, palette.brandBd),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 48.dp)
+                                    .testTag("onboarding_import_log_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Upload,
+                                    contentDescription = "Import workout log",
+                                    tint = palette.brandInk,
+                                    modifier = Modifier.size(18.dp)
                                 )
+                                Spacer(Modifier.width(8.dp))
                                 Text(
-                                    text = "Off by default (clean empty log). Turn on to preview charts and PRs right away.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = palette.muted
+                                    text = "Import JSON log",
+                                    color = palette.brandInk,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                             }
-                            Spacer(Modifier.width(10.dp))
-                            Switch(
-                                checked = loadSample,
-                                onCheckedChange = { loadSample = it },
-                                modifier = Modifier.testTag("onboarding_sample_switch")
-                            )
                         }
                     }
                 }
@@ -451,7 +475,7 @@ fun OnboardingScreen(
                         Text("Cancel", color = palette.muted)
                     }
                     Button(
-                        onClick = { onComplete(buildProfile(), nextFeeIso, false) },
+                        onClick = { onComplete(buildProfile(), nextFeeIso) },
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
                         modifier = Modifier
@@ -464,7 +488,7 @@ fun OnboardingScreen(
                 } else {
                     TextButton(
                         onClick = {
-                            if (step > 1) step-- else onComplete(buildProfile(), nextFeeIso, false)
+                            if (step > 1) step-- else onComplete(buildProfile(), nextFeeIso)
                         },
                         modifier = Modifier
                             .heightIn(min = 48.dp)
@@ -475,7 +499,7 @@ fun OnboardingScreen(
                     Button(
                         onClick = {
                             if (step < 3) step++
-                            else onComplete(buildProfile(), nextFeeIso, loadSample)
+                            else onComplete(buildProfile(), nextFeeIso)
                         },
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
@@ -507,13 +531,13 @@ private fun FeatureRow(
     val palette = LocalWorkoutPalette.current
     BorderedCard {
         Row(
-            modifier = Modifier.padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.Top
         ) {
             Box(
                 modifier = Modifier
-                    .size(30.dp)
+                    .size(32.dp)
                     .clip(RoundedCornerShape(6.dp))
                     .background(iconBg),
                 contentAlignment = Alignment.Center
@@ -522,7 +546,7 @@ private fun FeatureRow(
                     imageVector = icon,
                     contentDescription = null,
                     tint = iconTint,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -569,7 +593,7 @@ private fun ChoiceRow(
                     border = BorderStroke(1.dp, if (isSelected) palette.brand else palette.borderStrong),
                     modifier = Modifier
                         .weight(1f)
-                        .heightIn(min = 44.dp)
+                        .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable { onSelect(opt) }
                         .testTag("choice_${label.lowercase()}_${opt.lowercase()}")
@@ -577,7 +601,7 @@ private fun ChoiceRow(
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                         Text(
                             text = opt,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = if (isSelected) palette.brandInk else palette.text2,
                             maxLines = 1

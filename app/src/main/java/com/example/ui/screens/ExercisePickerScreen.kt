@@ -27,12 +27,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -89,15 +91,17 @@ fun ExercisePickerScreen(
     modifier: Modifier = Modifier
 ) {
     val palette = LocalWorkoutPalette.current
-    var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
+    var selectedTab by remember(initialTab) {
+        mutableIntStateOf(if (initialTab >= 2) 1 else 0)
+    }
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("All") }
     var describeQuery by remember { mutableStateOf("") }
     var showCustomDialog by remember { mutableStateOf(false) }
 
-    val tabs = listOf("Suggested", "Search", "Describe it")
+    val tabs = listOf("Exercises", "Describe it")
     val filterOptions = listOf(
-        "All", "Chest", "Back", "Shoulders", "Legs", "Abs",
+        "All", "Chest", "Back", "Shoulders", "Legs", "Abs", "Cardio",
         "Dumbbell", "Machine", "Bar", "Cable", "Bodyweight"
     )
     val describeExamples = listOf(
@@ -131,7 +135,7 @@ fun ExercisePickerScreen(
                     text = {
                         Text(
                             text = title,
-                            fontSize = 13.sp,
+                            fontSize = 14.sp,
                             fontWeight = if (selectedTab == idx) FontWeight.SemiBold else FontWeight.Medium,
                             color = if (selectedTab == idx) palette.brand else palette.muted
                         )
@@ -162,54 +166,11 @@ fun ExercisePickerScreen(
 
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            contentPadding = PaddingValues(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when (selectedTab) {
                 0 -> {
-                    item {
-                        BorderedCard(
-                            backgroundColor = palette.brandSoft,
-                            borderColor = palette.brandBd
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text(
-                                    text = "Your top lifts for ${draftGroups.joinToString(" + ").ifEmpty { "this day" }}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = palette.brandInk
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "Ordered by frequency. Weights carry over from your last session (+2.5 kg if rated Easy).",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = palette.brandHover
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        SectionLabel("Usual for ${draftGroups.joinToString(" + ").ifEmpty { "you" }}")
-                    }
-
-                    items(suggestedExercises, key = { it.first.name }) { (def, freq) ->
-                        val last = lastSessionOf(def.name)
-                        val why = if (freq > 0) {
-                            "You do this most on ${def.groups.firstOrNull() ?: "this"} days · ${freq}×"
-                        } else null
-                        PickerExerciseRow(
-                            def = def,
-                            last = last,
-                            why = why,
-                            alreadyAdded = draftExerciseNames.any { it.equals(def.name, ignoreCase = true) },
-                            onOpenDetail = { onOpenDetail(def.name) },
-                            onAdd = { onAddExercise(def.name) }
-                        )
-                    }
-                }
-
-                1 -> {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             OutlinedTextField(
@@ -221,6 +182,17 @@ fun ExercisePickerScreen(
                                         contentDescription = "Search exercises",
                                         tint = palette.faint
                                     )
+                                },
+                                trailingIcon = {
+                                    if (searchQuery.isNotEmpty()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Close,
+                                                contentDescription = "Clear search",
+                                                tint = palette.faint
+                                            )
+                                        }
+                                    }
                                 },
                                 placeholder = { Text("Search ${allExercises.size} exercises") },
                                 singleLine = true,
@@ -241,7 +213,7 @@ fun ExercisePickerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 filterOptions.forEach { f ->
                                     val selected = selectedFilter == f
@@ -253,17 +225,17 @@ fun ExercisePickerScreen(
                                             if (selected) palette.brand else palette.borderStrong
                                         ),
                                         modifier = Modifier
-                                            .heightIn(min = 36.dp)
+                                            .heightIn(min = 38.dp)
                                             .clip(RoundedCornerShape(4.dp))
                                             .clickable { selectedFilter = f }
                                     ) {
                                         Box(
                                             contentAlignment = Alignment.Center,
-                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                                         ) {
                                             Text(
                                                 text = f,
-                                                fontSize = 12.sp,
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = if (selected) palette.brandInk else palette.text2
                                             )
@@ -274,36 +246,57 @@ fun ExercisePickerScreen(
                         }
                     }
 
-                    item {
-                        val label = if (searchQuery.isNotBlank() || selectedFilter != "All") {
-                            "${searchResults.size} match${if (searchResults.size == 1) "" else "es"}"
-                        } else {
-                            "All exercises"
-                        }
-                        SectionLabel(label)
-                    }
-
-                    if (searchResults.isEmpty()) {
+                    val isSearchingOrFiltering = searchQuery.isNotBlank() || selectedFilter != "All"
+                    if (!isSearchingOrFiltering) {
                         item {
-                            EmptyMatchCard(
-                                onCustomClick = { showCustomDialog = true }
-                            )
+                            SectionLabel("Usual for ${draftGroups.joinToString(" + ").ifEmpty { "you" }}")
                         }
-                    } else {
-                        items(searchResults, key = { it.name }) { def ->
+
+                        items(suggestedExercises, key = { "sug_${it.first.name}" }) { (def, freq) ->
+                            val last = lastSessionOf(def.name)
+                            val why = if (freq > 0) {
+                                "You do this most on ${def.groups.firstOrNull() ?: "this"} days · ${freq}×"
+                            } else null
                             PickerExerciseRow(
                                 def = def,
-                                last = lastSessionOf(def.name),
-                                why = null,
+                                last = last,
+                                why = why,
+                                allExercises = allExercises,
                                 alreadyAdded = draftExerciseNames.any { it.equals(def.name, ignoreCase = true) },
                                 onOpenDetail = { onOpenDetail(def.name) },
                                 onAdd = { onAddExercise(def.name) }
                             )
                         }
+                    } else {
+                        item {
+                            SectionLabel(
+                                "${searchResults.size} match${if (searchResults.size == 1) "" else "es"}"
+                            )
+                        }
+
+                        if (searchResults.isEmpty()) {
+                            item {
+                                EmptyMatchCard(
+                                    onCustomClick = { showCustomDialog = true }
+                                )
+                            }
+                        } else {
+                            items(searchResults, key = { "res_${it.name}" }) { def ->
+                                PickerExerciseRow(
+                                    def = def,
+                                    last = lastSessionOf(def.name),
+                                    why = null,
+                                    allExercises = allExercises,
+                                    alreadyAdded = draftExerciseNames.any { it.equals(def.name, ignoreCase = true) },
+                                    onOpenDetail = { onOpenDetail(def.name) },
+                                    onAdd = { onAddExercise(def.name) }
+                                )
+                            }
+                        }
                     }
                 }
 
-                2 -> {
+                1 -> {
                     item {
                         BorderedCard {
                             Column(
@@ -318,7 +311,7 @@ fun ExercisePickerScreen(
                                         color = palette.text
                                     )
                                     Text(
-                                        text = "Describe the machine, the movement, or where you feel it. Offline matching runs instantly; tap Ask Gemini AI for a smart second opinion when online.",
+                                        text = "Describe the machine, the movement, or where you feel it. Offline matching runs instantly; tap Ask Gemini AI when online.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = palette.muted
                                     )
@@ -363,10 +356,10 @@ fun ExercisePickerScreen(
                                         ) {
                                             Text(
                                                 text = "\"${example.take(26)}…\"",
-                                                fontSize = 11.sp,
+                                                fontSize = 12.sp,
                                                 fontWeight = FontWeight.Medium,
                                                 color = palette.text2,
-                                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                                             )
                                         }
                                     }
@@ -389,7 +382,7 @@ fun ExercisePickerScreen(
                                         )
                                         Text(
                                             text = "On-device match · works offline",
-                                            fontSize = 11.sp,
+                                            fontSize = 12.sp,
                                             fontWeight = FontWeight.Medium,
                                             color = palette.muted
                                         )
@@ -404,7 +397,7 @@ fun ExercisePickerScreen(
                                             contentColor = palette.brandInk
                                         ),
                                         modifier = Modifier
-                                            .heightIn(min = 40.dp)
+                                            .heightIn(min = 44.dp)
                                             .testTag("picker_ask_gemini_button")
                                     ) {
                                         Icon(
@@ -415,7 +408,7 @@ fun ExercisePickerScreen(
                                         Spacer(Modifier.width(6.dp))
                                         Text(
                                             text = "Ask Gemini AI",
-                                            fontSize = 12.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
@@ -433,18 +426,19 @@ fun ExercisePickerScreen(
                                     borderColor = palette.brandBd
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(14.dp),
+                                        modifier = Modifier.padding(16.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                                     ) {
                                         CircularProgressIndicator(
-                                            modifier = Modifier.size(20.dp),
+                                            modifier = Modifier.size(22.dp),
                                             strokeWidth = 2.dp,
                                             color = palette.brand
                                         )
                                         Text(
                                             text = "Asking Gemini AI to identify the exercise…",
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
                                             color = palette.brandInk
                                         )
                                     }
@@ -455,18 +449,21 @@ fun ExercisePickerScreen(
                             item {
                                 BorderedCard(
                                     backgroundColor = palette.redSoft,
-                                    borderColor = palette.redInk.copy(alpha = 0.4f)
+                                    borderColor = palette.redInk.copy(alpha = 0.5f)
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
+                                    Column(
+                                        modifier = Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Text(
                                             text = "Gemini AI unavailable",
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.titleSmall,
                                             fontWeight = FontWeight.SemiBold,
                                             color = palette.redInk
                                         )
                                         Text(
                                             text = aiLookupState.message,
-                                            style = MaterialTheme.typography.bodySmall,
+                                            style = MaterialTheme.typography.bodyMedium,
                                             color = palette.redInk
                                         )
                                     }
@@ -484,7 +481,7 @@ fun ExercisePickerScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(12.dp),
+                                            .padding(14.dp),
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
@@ -502,13 +499,13 @@ fun ExercisePickerScreen(
                                             )
                                             Text(
                                                 text = "${sug.equipment} · ${sug.muscleGroups.joinToString(", ")}",
-                                                fontSize = 11.sp,
+                                                fontSize = 12.sp,
                                                 color = palette.muted
                                             )
                                             if (sug.reason.isNotBlank()) {
                                                 Text(
                                                     text = sug.reason,
-                                                    fontSize = 11.sp,
+                                                    fontSize = 12.sp,
                                                     color = palette.brandInk
                                                 )
                                             }
@@ -518,7 +515,7 @@ fun ExercisePickerScreen(
                                             color = palette.brandSoft,
                                             border = BorderStroke(1.dp, palette.brandBd),
                                             modifier = Modifier
-                                                .size(44.dp)
+                                                .size(48.dp)
                                                 .clip(RoundedCornerShape(4.dp))
                                                 .clickable { onAddAiSuggestion(sug) }
                                         ) {
@@ -557,6 +554,7 @@ fun ExercisePickerScreen(
                                 def = match.exercise,
                                 last = lastSessionOf(match.exercise.name),
                                 why = "${match.matchLabel} · ${match.exercise.groups.take(2).joinToString(", ")}",
+                                allExercises = allExercises,
                                 alreadyAdded = draftExerciseNames.any {
                                     it.equals(match.exercise.name, ignoreCase = true)
                                 },
@@ -588,6 +586,7 @@ private fun PickerExerciseRow(
     def: ExerciseDefinition,
     last: Pair<String, LoggedExercise>?,
     why: String?,
+    allExercises: List<ExerciseDefinition>,
     alreadyAdded: Boolean,
     onOpenDetail: () -> Unit,
     onAdd: () -> Unit
@@ -597,7 +596,7 @@ private fun PickerExerciseRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -622,11 +621,11 @@ private fun PickerExerciseRow(
                 )
                 Text(
                     text = if (last != null) {
-                        "${def.equipment} · ${WorkoutMath.formatAgo(last.first)} · ${WorkoutMath.formatSetSummary(last.second)}"
+                        "${def.equipment} · ${WorkoutMath.formatAgo(last.first)} · ${WorkoutMath.formatSetSummary(last.second, allExercises)}"
                     } else {
                         "${def.equipment} · not logged yet"
                     },
-                    fontSize = 11.sp,
+                    fontSize = 12.sp,
                     color = palette.muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -634,7 +633,7 @@ private fun PickerExerciseRow(
                 if (!why.isNullOrBlank()) {
                     Text(
                         text = why,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = palette.greenInk
                     )
@@ -645,7 +644,7 @@ private fun PickerExerciseRow(
                 color = if (alreadyAdded) palette.subtle else palette.brandSoft,
                 border = BorderStroke(1.dp, if (alreadyAdded) palette.border else palette.brandBd),
                 modifier = Modifier
-                    .size(44.dp)
+                    .size(48.dp)
                     .clip(RoundedCornerShape(4.dp))
                     .clickable(onClick = onAdd)
                     .testTag("picker_add_${def.name.lowercase().replace(' ', '_')}")
@@ -674,7 +673,7 @@ private fun EmptyMatchCard(
                 .fillMaxWidth()
                 .padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "No match yet.",
@@ -692,7 +691,7 @@ private fun EmptyMatchCard(
                 border = BorderStroke(1.dp, palette.brandBd),
                 modifier = Modifier
                     .padding(top = 4.dp)
-                    .heightIn(min = 44.dp)
+                    .heightIn(min = 48.dp)
                     .testTag("picker_add_custom_button")
             ) {
                 Text("Add as custom exercise", color = palette.brandInk)
@@ -735,13 +734,13 @@ private fun CustomExerciseDialog(
                             color = if (sel) MaterialTheme.colorScheme.primaryContainer else Color.Transparent,
                             modifier = Modifier.clickable { equipment = eq }
                         ) {
-                            Text(eq, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                            Text(eq, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
                         }
                     }
                 }
                 Text("Muscle group", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    ExerciseCatalog.MUSCLE_GROUPS.take(8).forEach { grp ->
+                    ExerciseCatalog.MUSCLE_GROUPS.forEach { grp ->
                         val sel = grp in selectedGroups
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -751,7 +750,7 @@ private fun CustomExerciseDialog(
                                 selectedGroups = if (sel && selectedGroups.size > 1) selectedGroups - grp else selectedGroups + grp
                             }
                         ) {
-                            Text(grp, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
+                            Text(grp, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp))
                         }
                     }
                 }

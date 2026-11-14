@@ -35,8 +35,15 @@ interface WorkoutDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomExercise(exercise: CustomExerciseEntity)
 
+    @Transaction
+    @Query("SELECT * FROM workout_sessions WHERE dateIso = :dateIso ORDER BY id ASC")
+    suspend fun getSessionsByDate(dateIso: String): List<SessionWithExercises>
+
     @Query("DELETE FROM workout_sessions WHERE id = :sessionId")
     suspend fun deleteSessionById(sessionId: Long)
+
+    @Query("DELETE FROM workout_sessions WHERE id IN (:sessionIds)")
+    suspend fun deleteSessionsByIds(sessionIds: List<Long>)
 
     @Query("DELETE FROM workout_sessions")
     suspend fun clearSessions()
@@ -61,6 +68,18 @@ interface WorkoutDao {
             insertSets(boundSets)
         }
         return sessionId
+    }
+
+    @Transaction
+    suspend fun replaceSessionsByIds(
+        idsToDelete: List<Long>,
+        session: WorkoutSessionEntity,
+        exercisesWithSets: List<Pair<LoggedExerciseEntity, List<LoggedSetEntity>>>
+    ): Long {
+        if (idsToDelete.isNotEmpty()) {
+            deleteSessionsByIds(idsToDelete)
+        }
+        return insertFullSession(session, exercisesWithSets)
     }
 
     @Transaction

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.ExerciseCatalog
+import com.example.domain.ExerciseDefinition
 import com.example.domain.RpeRating
 import com.example.domain.WorkoutMath
 import com.example.domain.WorkoutSession
@@ -47,6 +48,7 @@ import com.example.ui.theme.LocalWorkoutPalette
 fun PreviousWorkoutsScreen(
     draftGroups: List<String>,
     draftExerciseNames: Set<String>,
+    allExercises: List<ExerciseDefinition>,
     sessionsMatchingGroups: (List<String>) -> List<WorkoutSession>,
     onAddExerciseToDraft: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -64,8 +66,8 @@ fun PreviousWorkoutsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(palette.appBg),
-        contentPadding = PaddingValues(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             BorderedCard(
@@ -110,7 +112,7 @@ fun PreviousWorkoutsScreen(
                         ) {
                             Text(
                                 text = grp ?: "All selected",
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = if (isSelected) palette.brandInk else palette.text2
                             )
@@ -161,12 +163,20 @@ fun PreviousWorkoutsScreen(
                                 color = palette.faint
                             )
                             Spacer(Modifier.weight(1f))
-                            Text(
-                                text = "${WorkoutMath.formatVolume(WorkoutMath.sessionVolume(session))} · ${session.durationMinutes} min",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = palette.text2
-                            )
+                            val vol = WorkoutMath.sessionVolume(session, allExercises)
+                            val durPart = if (session.durationMinutes > 0) "${session.durationMinutes} min" else ""
+                            val metaLabel = listOf(
+                                if (vol > 0.0) WorkoutMath.formatVolume(vol) else "",
+                                durPart
+                            ).filter { it.isNotEmpty() }.joinToString(" · ")
+                            if (metaLabel.isNotEmpty()) {
+                                Text(
+                                    text = metaLabel,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = palette.text2
+                                )
+                            }
                         }
 
                         Box(
@@ -183,7 +193,7 @@ fun PreviousWorkoutsScreen(
                             val rpeColor = when (ex.rpe) {
                                 RpeRating.EASY -> palette.greenInk
                                 RpeRating.HARD -> palette.redInk
-                                RpeRating.RIGHT -> palette.muted
+                                RpeRating.RIGHT -> palette.brandInk
                                 null -> palette.faint
                             }
                             val rpeText = when (ex.rpe) {
@@ -195,7 +205,7 @@ fun PreviousWorkoutsScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 9.dp),
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
@@ -210,13 +220,13 @@ fun PreviousWorkoutsScreen(
                                     )
                                     Text(
                                         text = ex.equipment,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = palette.faint
                                     )
                                 }
                                 Column(horizontalAlignment = Alignment.End) {
                                     Text(
-                                        text = WorkoutMath.formatSetSummary(ex),
+                                        text = WorkoutMath.formatSetSummary(ex, allExercises),
                                         style = MaterialTheme.typography.bodyMedium.copy(
                                             fontFeatureSettings = "tnum"
                                         ),
@@ -225,7 +235,7 @@ fun PreviousWorkoutsScreen(
                                     )
                                     Text(
                                         text = rpeText,
-                                        fontSize = 11.sp,
+                                        fontSize = 12.sp,
                                         color = rpeColor
                                     )
                                 }
@@ -244,7 +254,7 @@ fun PreviousWorkoutsScreen(
                                     ) {
                                         Text(
                                             text = if (alreadyInDraft) "Added" else "Add",
-                                            fontSize = 12.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.SemiBold,
                                             color = if (alreadyInDraft) palette.faint else palette.brandInk
                                         )
