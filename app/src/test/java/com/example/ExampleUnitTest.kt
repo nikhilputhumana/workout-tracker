@@ -99,11 +99,17 @@ class ExampleUnitTest {
     val restored = backupManager.deserialize(json)
 
     assertEquals("workout-tracker", restored.app)
-    assertEquals("Alex", restored.profile.name)
+    assertEquals("Alex", restored.profile?.name)
     assertEquals(1, restored.sessions.size)
     assertEquals("Barbell bench press", restored.sessions.first().ex.first().name)
     assertEquals("RIGHT", restored.sessions.first().ex.first().rpe)
     assertEquals(1, restored.customExercises.size)
     assertEquals("Landmine press", restored.customExercises.first().name)
+
+    val workoutsOnly = backupManager.deserialize(
+      """{"app":"workout-tracker","version":1,"sessions":[{"date":"2026-01-24","groups":["Push"],"mins":50,"ex":[]}]}"""
+    )
+    assertEquals(null, workoutsOnly.profile)
+    assertEquals(1, workoutsOnly.sessions.size)
   }
 }

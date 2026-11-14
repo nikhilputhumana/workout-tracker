@@ -254,28 +254,52 @@ class WorkoutRepository(
             )
         }
 
-        dao.replaceAllData(sessionEntities, bwEntities, customEntities)
-        prefs.restoreFromBackup(
-            profile = UserProfile(
-                name = payload.profile.name,
-                age = payload.profile.age,
-                gender = payload.profile.gender,
-                heightCm = payload.profile.height,
-                bodyWeightKg = payload.profile.weight,
-                bodyFatPercent = payload.profile.bf,
-                experienceLevel = payload.profile.level,
-                preferredSplit = payload.profile.split,
-                onboardingComplete = true
-            ),
-            waistCm = payload.measures.waist,
-            chestCm = payload.measures.chest,
-            armCm = payload.measures.arm,
-            feeRecord = GymFeeRecord(
-                lastPaidIso = payload.fees.last,
-                nextDueIso = payload.fees.next,
-                amount = payload.fees.amount
+        val profile = payload.profile
+        if (profile != null || payload.bodyWeightLog.isNotEmpty()) {
+            dao.replaceAllData(sessionEntities, bwEntities, customEntities)
+        } else {
+            dao.replaceSessionsAndCustomExercises(sessionEntities, customEntities)
+        }
+
+        if (profile != null && payload.measures != null && payload.fees != null) {
+            prefs.restoreFromBackup(
+                profile = UserProfile(
+                    name = profile.name,
+                    age = profile.age,
+                    gender = profile.gender,
+                    heightCm = profile.height,
+                    bodyWeightKg = profile.weight,
+                    bodyFatPercent = profile.bf,
+                    experienceLevel = profile.level,
+                    preferredSplit = profile.split,
+                    onboardingComplete = true
+                ),
+                waistCm = payload.measures.waist,
+                chestCm = payload.measures.chest,
+                armCm = payload.measures.arm,
+                feeRecord = GymFeeRecord(
+                    lastPaidIso = payload.fees.last,
+                    nextDueIso = payload.fees.next,
+                    amount = payload.fees.amount
+                )
             )
-        )
+        } else if (profile != null) {
+            prefs.saveProfile(
+                UserProfile(
+                    name = profile.name,
+                    age = profile.age,
+                    gender = profile.gender,
+                    heightCm = profile.height,
+                    bodyWeightKg = profile.weight,
+                    bodyFatPercent = profile.bf,
+                    experienceLevel = profile.level,
+                    preferredSplit = profile.split,
+                    onboardingComplete = true
+                )
+            )
+        } else {
+            prefs.setOnboardingComplete(true)
+        }
         return payload.sessions.size
     }
 }

@@ -83,11 +83,11 @@ data class BackupCustomExerciseDto(
 data class BackupPayloadDto(
     val app: String = "workout-tracker",
     val version: Int = 1,
-    val exportedAt: String,
-    val profile: BackupProfileDto,
-    val measures: BackupMeasuresDto,
-    val fees: BackupFeesDto,
-    val bodyWeightLog: List<BackupBodyWeightDto>,
+    val exportedAt: String = "",
+    val profile: BackupProfileDto? = null,
+    val measures: BackupMeasuresDto? = null,
+    val fees: BackupFeesDto? = null,
+    val bodyWeightLog: List<BackupBodyWeightDto> = emptyList(),
     val sessions: List<BackupSessionDto>,
     val customExercises: List<BackupCustomExerciseDto> = emptyList()
 )

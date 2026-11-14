@@ -78,4 +78,17 @@ interface WorkoutDao {
             insertFullSession(session, exList)
         }
     }
+
+    @Transaction
+    suspend fun replaceSessionsAndCustomExercises(
+        sessions: List<Pair<WorkoutSessionEntity, List<Pair<LoggedExerciseEntity, List<LoggedSetEntity>>>>>,
+        customExercises: List<CustomExerciseEntity>
+    ) {
+        clearSessions()
+        clearCustomExercises()
+        customExercises.forEach { insertCustomExercise(it) }
+        sessions.forEach { (session, exList) ->
+            insertFullSession(session, exList)
+        }
+    }
 }
