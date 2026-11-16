@@ -3,6 +3,7 @@ package com.example.data
 import android.net.Uri
 import com.example.domain.ActiveDraft
 import com.example.domain.AppearanceMode
+import com.example.domain.BodyMeasurementEntry
 import com.example.domain.BodyMeasurements
 import com.example.domain.BodyWeightEntry
 import com.example.domain.ExerciseCatalog
@@ -67,6 +68,20 @@ class WorkoutRepository(
         entries.map { BodyWeightEntry(it.id, it.dateIso, it.weightKg) }
     }
 
+    val measurementLogFlow: Flow<List<BodyMeasurementEntry>> = dao.observeMeasurementEntries().map { entries ->
+        entries.map {
+            BodyMeasurementEntry(
+                id = it.id,
+                dateIso = it.dateIso,
+                waistCm = it.waistCm,
+                chestCm = it.chestCm,
+                armCm = it.armCm,
+                heightCm = it.heightCm,
+                bodyFatPercent = it.bodyFatPercent
+            )
+        }
+    }
+
     val customExercisesFlow: Flow<List<ExerciseDefinition>> = dao.observeCustomExercises().map { list ->
         list.map { entity ->
             ExerciseDefinition(
@@ -99,8 +114,50 @@ class WorkoutRepository(
         prefs.updateBodyWeight(weightKg)
     }
 
-    suspend fun saveMeasurements(waistCm: Double, chestCm: Double, armCm: Double) {
+    suspend fun saveMeasurements(
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?,
+        recordHistory: Boolean = true,
+        dateIso: String = WorkoutMath.todayIso(),
+        heightCm: Int? = null,
+        bodyFatPercent: Double? = null
+    ) {
         prefs.saveMeasurements(waistCm, chestCm, armCm)
+        if (recordHistory && (waistCm != null || chestCm != null || armCm != null || heightCm != null || bodyFatPercent != null)) {
+            dao.insertMeasurementEntry(
+                BodyMeasurementEntity(
+                    dateIso = dateIso,
+                    waistCm = waistCm,
+                    chestCm = chestCm,
+                    armCm = armCm,
+                    heightCm = heightCm,
+                    bodyFatPercent = bodyFatPercent
+                )
+            )
+        }
+    }
+
+    suspend fun recordMeasurementSnapshot(
+        waistCm: Double? = null,
+        chestCm: Double? = null,
+        armCm: Double? = null,
+        heightCm: Int? = null,
+        bodyFatPercent: Double? = null,
+        dateIso: String = WorkoutMath.todayIso()
+    ) {
+        if (waistCm != null || chestCm != null || armCm != null || heightCm != null || bodyFatPercent != null) {
+            dao.insertMeasurementEntry(
+                BodyMeasurementEntity(
+                    dateIso = dateIso,
+                    waistCm = waistCm,
+                    chestCm = chestCm,
+                    armCm = armCm,
+                    heightCm = heightCm,
+                    bodyFatPercent = bodyFatPercent
+                )
+            )
+        }
     }
 
     suspend fun saveGymFee(record: GymFeeRecord) {
@@ -164,8 +221,17 @@ class WorkoutRepository(
     suspend fun saveCompletedDraft(draft: ActiveDraft): Long {
         val newDurationMins = draft.manualDurationMinutes?.coerceAtLeast(0)
             ?: (draft.elapsedSeconds / 60).coerceAtLeast(0)
+        val isEditing = draft.editingSessionIds.isNotEmpty()
 
-        val newExPairs = draft.exercises.mapIndexed { idx, ex ->
+        val newExPairs = draft.exercises.mapIndexedNotNull { idx, ex ->
+            val targetSets = if (isEditing) {
+                ex.sets
+            } else {
+                ex.sets.filter { it.isCompleted }
+            }
+            if (!isEditing && targetSets.isEmpty()) {
+                return@mapIndexedNotNull null
+            }
             val entity = LoggedExerciseEntity(
                 sessionId = 0,
                 orderIndex = idx,
@@ -174,7 +240,7 @@ class WorkoutRepository(
                 rpeName = ex.rpe?.name,
                 note = ex.note.trim()
             )
-            val setEntities = ex.sets.mapIndexed { sIdx, s ->
+            val setEntities = targetSets.mapIndexed { sIdx, s ->
                 LoggedSetEntity(
                     loggedExerciseId = 0,
                     setIndex = sIdx,
@@ -184,6 +250,10 @@ class WorkoutRepository(
                 )
             }
             entity to setEntities
+        }
+
+        if (!isEditing && newExPairs.isEmpty()) {
+            return -1L
         }
 
         if (draft.editingSessionIds.isNotEmpty()) {
@@ -327,8 +397,17 @@ class WorkoutRepository(
         fees: GymFeeRecord,
         bodyWeights: List<BodyWeightEntry>,
         sessions: List<WorkoutSession>,
-        customExercises: List<ExerciseDefinition>
-    ): String = backupManager.serialize(profile, measures, fees, bodyWeights, sessions, customExercises)
+        customExercises: List<ExerciseDefinition>,
+        measurementLog: List<BodyMeasurementEntry> = emptyList()
+    ): String = backupManager.serialize(
+        profile = profile,
+        measures = measures,
+        fees = fees,
+        bodyWeightLog = bodyWeights,
+        sessions = sessions,
+        customExercises = customExercises,
+        measurementLog = measurementLog
+    )
 
     suspend fun importBackupJson(json: String): ImportResult {
         val payload = backupManager.deserialize(json)
@@ -370,6 +449,23 @@ class WorkoutRepository(
             val safeDate = entry.date.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate
             BodyWeightEntity(dateIso = safeDate, weightKg = safeKg)
         }
+        val measureEntities = payload.measurementLog.mapNotNull { entry ->
+            val w = entry.waist?.takeIf { it.isFinite() && it in 30.0..250.0 }
+            val c = entry.chest?.takeIf { it.isFinite() && it in 40.0..250.0 }
+            val a = entry.arm?.takeIf { it.isFinite() && it in 15.0..100.0 }
+            val h = entry.height?.takeIf { it in 100..240 }
+            val bf = entry.bf?.takeIf { it.isFinite() && it in 3.0..65.0 }
+            if (w == null && c == null && a == null && h == null && bf == null) return@mapNotNull null
+            val safeDate = entry.date.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate
+            BodyMeasurementEntity(
+                dateIso = safeDate,
+                waistCm = w,
+                chestCm = c,
+                armCm = a,
+                heightCm = h,
+                bodyFatPercent = bf
+            )
+        }
         val customEntities = payload.customExercises.mapNotNull { item ->
             val cleanName = item.name.trim()
             if (cleanName.isEmpty()) return@mapNotNull null
@@ -384,29 +480,34 @@ class WorkoutRepository(
         }
 
         val profile = payload.profile
-        if (profile != null || payload.bodyWeightLog.isNotEmpty()) {
-            dao.replaceAllData(sessionEntities, bwEntities, customEntities)
+        if (profile != null || payload.bodyWeightLog.isNotEmpty() || measureEntities.isNotEmpty()) {
+            dao.replaceAllData(sessionEntities, bwEntities, customEntities, measureEntities)
         } else {
             dao.replaceSessionsAndCustomExercises(sessionEntities, customEntities)
         }
 
-        if (profile != null && payload.measures != null && payload.fees != null) {
+        val safeWaist = payload.measures?.waist?.takeIf { it.isFinite() && it in 30.0..250.0 }
+        val safeChest = payload.measures?.chest?.takeIf { it.isFinite() && it in 40.0..250.0 }
+        val safeArm = payload.measures?.arm?.takeIf { it.isFinite() && it in 15.0..100.0 }
+
+        if (profile != null && payload.fees != null) {
             prefs.restoreFromBackup(
                 profile = UserProfile(
                     name = profile.name.trim(),
-                    age = profile.age.coerceIn(12, 100),
-                    gender = profile.gender.trim().ifEmpty { "Male" },
+                    age = profile.age?.coerceIn(12, 100),
+                    gender = profile.gender.trim(),
                     heightCm = profile.height.coerceIn(100, 240),
                     bodyWeightKg = profile.weight.takeIf { it.isFinite() }?.coerceIn(25.0, 300.0) ?: 74.5,
                     bodyFatPercent = profile.bf?.takeIf { it.isFinite() }?.coerceIn(3.0, 65.0),
-                    experienceLevel = profile.level.trim().ifEmpty { "Intermediate" },
+                    experienceLevel = profile.level.trim(),
                     preferredSplit = profile.split.trim().ifEmpty { "Push / Pull / Legs (PPL)" },
+                    preferredRepRange = profile.repRange.trim().ifEmpty { "15-12-10-8" },
                     weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 ),
-                waistCm = payload.measures.waist.takeIf { it.isFinite() }?.coerceIn(30.0, 250.0) ?: 82.0,
-                chestCm = payload.measures.chest.takeIf { it.isFinite() }?.coerceIn(40.0, 250.0) ?: 102.0,
-                armCm = payload.measures.arm.takeIf { it.isFinite() }?.coerceIn(15.0, 100.0) ?: 35.0,
+                waistCm = safeWaist,
+                chestCm = safeChest,
+                armCm = safeArm,
                 feeRecord = GymFeeRecord(
                     lastPaidIso = payload.fees.last.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: fallbackDate,
                     nextDueIso = payload.fees.next.trim().takeIf { WorkoutMath.isValidIsoDate(it) } ?: WorkoutMath.isoOffsetMonths(1, fallbackDate),
@@ -417,17 +518,21 @@ class WorkoutRepository(
             prefs.saveProfile(
                 UserProfile(
                     name = profile.name.trim(),
-                    age = profile.age.coerceIn(12, 100),
-                    gender = profile.gender.trim().ifEmpty { "Male" },
+                    age = profile.age?.coerceIn(12, 100),
+                    gender = profile.gender.trim(),
                     heightCm = profile.height.coerceIn(100, 240),
                     bodyWeightKg = profile.weight.takeIf { it.isFinite() }?.coerceIn(25.0, 300.0) ?: 74.5,
                     bodyFatPercent = profile.bf?.takeIf { it.isFinite() }?.coerceIn(3.0, 65.0),
-                    experienceLevel = profile.level.trim().ifEmpty { "Intermediate" },
+                    experienceLevel = profile.level.trim(),
                     preferredSplit = profile.split.trim().ifEmpty { "Push / Pull / Legs (PPL)" },
+                    preferredRepRange = profile.repRange.trim().ifEmpty { "15-12-10-8" },
                     weeklyTargetSessions = profile.weeklyTarget.coerceIn(1, 7),
                     onboardingComplete = true
                 )
             )
+            if (payload.measures != null) {
+                prefs.saveMeasurements(safeWaist, safeChest, safeArm)
+            }
         } else {
             prefs.setOnboardingComplete(true)
         }

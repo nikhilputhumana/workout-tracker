@@ -67,6 +67,17 @@ data class BodyWeightEntity(
     val weightKg: Double
 )
 
+@Entity(tableName = "body_measurement_entries")
+data class BodyMeasurementEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dateIso: String,
+    val waistCm: Double? = null,
+    val chestCm: Double? = null,
+    val armCm: Double? = null,
+    val heightCm: Int? = null,
+    val bodyFatPercent: Double? = null
+)
+
 @Entity(tableName = "custom_exercises")
 data class CustomExerciseEntity(
     @PrimaryKey val name: String,

@@ -20,6 +20,22 @@ object ExerciseCatalog {
         "Bar", "Dumbbell", "Machine", "Cable", "Bodyweight", "Kettlebell", "Band"
     )
 
+    val REP_RANGE_PRESETS = listOf(
+        "15-12-10-8",
+        "12-10-8-8",
+        "12-10-8",
+        "10-10-10",
+        "12-12-12",
+        "8-6-5"
+    )
+
+    fun parseRepRange(raw: String): List<Int> {
+        val parsed = raw.split(Regex("[^0-9]+"))
+            .mapNotNull { it.toIntOrNull() }
+            .filter { it in 1..100 }
+        return if (parsed.isNotEmpty()) parsed else listOf(15, 12, 10, 8)
+    }
+
     val TRAINING_SPLITS = listOf(
         SplitPreset(
             name = "Push / Pull / Legs (PPL)",
@@ -264,6 +280,21 @@ object WorkoutMath {
 
     fun todayIso(): String = localIsoFormat().format(Date())
 
+    fun isoFromEpochMillis(millis: Long): String =
+        if (millis > 0L) localIsoFormat().format(Date(millis)) else todayIso()
+
+    fun calculateBmi(weightKg: Double, heightCm: Int): Double {
+        val heightM = (heightCm / 100.0).coerceAtLeast(1.0)
+        return weightKg / (heightM * heightM)
+    }
+
+    fun bmiCategory(bmi: Double): String = when {
+        bmi < 18.5 -> "Underweight"
+        bmi < 25.0 -> "Normal"
+        bmi < 30.0 -> "Overweight"
+        else -> "Obese"
+    }
+
     private fun parseUtcCalendar(iso: String): Calendar? {
         val date = runCatching { isoFormat().parse(iso.trim()) }.getOrNull() ?: return null
         return Calendar.getInstance(utcTz, Locale.US).apply {
@@ -355,19 +386,27 @@ object WorkoutMath {
 
     fun draftVolume(
         draft: ActiveDraft,
-        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
+        onlyCompleted: Boolean = false
     ): Double =
         draft.exercises.sumOf { ex ->
             if (ExerciseCatalog.isCardioExercise(ex.name, allExercises)) 0.0
-            else ex.sets.sumOf { st ->
-                val r = st.repsText.toIntOrNull() ?: 0
-                val w = st.weightText.toDoubleOrNull() ?: 0.0
-                r * w
-            }
+            else ex.sets
+                .filter { !onlyCompleted || it.isCompleted }
+                .sumOf { st ->
+                    val r = st.repsText.toIntOrNull() ?: 0
+                    val w = st.weightText.toDoubleOrNull() ?: 0.0
+                    r * w
+                }
         }
 
-    fun draftSetCount(draft: ActiveDraft): Int =
-        draft.exercises.sumOf { it.sets.size }
+    fun draftSetCount(
+        draft: ActiveDraft,
+        onlyCompleted: Boolean = false
+    ): Int =
+        draft.exercises.sumOf { ex ->
+            ex.sets.count { !onlyCompleted || it.isCompleted }
+        }
 
     fun formatVolume(kg: Double): String =
         if (kg >= 1000.0) String.format(Locale.US, "%.1f t", kg / 1000.0)
@@ -447,18 +486,18 @@ object WorkoutMath {
     fun estimateDraftCalories(
         draft: ActiveDraft,
         bodyWeightKg: Double,
-        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES
+        allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
+        onlyCompleted: Boolean = false
     ): Int {
-        val syntheticSession = WorkoutSession(
-            dateIso = draft.dateIso,
-            groups = draft.groups,
-            durationMinutes = draft.manualDurationMinutes ?: (draft.elapsedSeconds / 60),
-            note = draft.sessionNote,
-            exercises = draft.exercises.map { ex ->
+        val filteredExercises = draft.exercises.mapNotNull { ex ->
+            val targetSets = if (onlyCompleted) ex.sets.filter { it.isCompleted } else ex.sets
+            if (onlyCompleted && targetSets.isEmpty()) {
+                null
+            } else {
                 LoggedExercise(
                     name = ex.name,
                     equipment = ex.equipment,
-                    sets = ex.sets.map { s ->
+                    sets = targetSets.map { s ->
                         LoggedSet(
                             reps = s.repsText.toIntOrNull() ?: 0,
                             weightKg = s.weightText.toDoubleOrNull() ?: 0.0,
@@ -469,6 +508,13 @@ object WorkoutMath {
                     note = ex.note
                 )
             }
+        }
+        val syntheticSession = WorkoutSession(
+            dateIso = draft.dateIso,
+            groups = draft.groups,
+            durationMinutes = draft.manualDurationMinutes ?: (draft.elapsedSeconds / 60),
+            note = draft.sessionNote,
+            exercises = filteredExercises
         )
         return estimateSessionCalories(syntheticSession, bodyWeightKg, allExercises)
     }

@@ -13,6 +13,7 @@ import com.example.domain.ActiveDraft
 import com.example.domain.AiExerciseSuggestion
 import com.example.domain.AiLookupState
 import com.example.domain.AppearanceMode
+import com.example.domain.BodyMeasurementEntry
 import com.example.domain.BodyMeasurements
 import com.example.domain.BodyWeightEntry
 import com.example.domain.DraftExercise
@@ -57,6 +58,7 @@ data class MainUiState(
     val appearanceMode: AppearanceMode = AppearanceMode.SYSTEM,
     val sessions: List<WorkoutSession> = emptyList(),
     val bodyWeightLog: List<BodyWeightEntry> = emptyList(),
+    val measurementLog: List<BodyMeasurementEntry> = emptyList(),
     val customExercises: List<ExerciseDefinition> = emptyList(),
     val allExercises: List<ExerciseDefinition> = ExerciseCatalog.BUILT_IN_EXERCISES,
     val activeDraft: ActiveDraft? = null,
@@ -109,10 +111,11 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         combine(
             repository.sessionsFlow,
             repository.bodyWeightFlow,
+            repository.measurementLogFlow,
             repository.customExercisesFlow,
             _bundledExercises
-        ) { sessions, bw, custom, bundled ->
-            listOf(sessions, bw, custom, bundled)
+        ) { sessions, bw, measureLog, custom, bundled ->
+            listOf(sessions, bw, measureLog, custom, bundled)
         },
         combine(_activeDraft, _wizardState) { draft, wizard -> draft to wizard },
         _aiState,
@@ -127,9 +130,11 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         @Suppress("UNCHECKED_CAST")
         val bw = dbList[1] as List<BodyWeightEntry>
         @Suppress("UNCHECKED_CAST")
-        val custom = dbList[2] as List<ExerciseDefinition>
+        val measureLog = dbList[2] as List<BodyMeasurementEntry>
         @Suppress("UNCHECKED_CAST")
-        val bundled = dbList[3] as List<ExerciseDefinition>
+        val custom = dbList[3] as List<ExerciseDefinition>
+        @Suppress("UNCHECKED_CAST")
+        val bundled = dbList[4] as List<ExerciseDefinition>
         val combinedExercises = (ExerciseCatalog.BUILT_IN_EXERCISES + bundled + custom)
             .distinctBy { it.name.lowercase(Locale.US) }
         MainUiState(
@@ -141,6 +146,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             appearanceMode = appearance,
             sessions = sessions,
             bodyWeightLog = bw,
+            measurementLog = measureLog,
             customExercises = custom,
             allExercises = combinedExercises,
             activeDraft = draftWizard.first,
@@ -176,14 +182,26 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
 
     fun completeOnboarding(
         profile: UserProfile,
-        nextFeeDueIso: String
+        nextFeeDueIso: String,
+        waistCm: Double? = null,
+        chestCm: Double? = null,
+        armCm: Double? = null
     ) {
         viewModelScope.launch {
             val savedProfile = profile.copy(
-                name = profile.name.ifBlank { "Athlete" },
+                name = profile.name.trim(),
+                preferredRepRange = profile.preferredRepRange.trim().ifBlank { "15-12-10-8" },
                 onboardingComplete = true
             )
             repository.saveProfile(savedProfile)
+            repository.saveMeasurements(
+                waistCm = waistCm,
+                chestCm = chestCm,
+                armCm = armCm,
+                recordHistory = true,
+                heightCm = savedProfile.heightCm,
+                bodyFatPercent = savedProfile.bodyFatPercent
+            )
             if (nextFeeDueIso.isNotBlank()) {
                 val currentFee = uiState.value.gymFee
                 repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
@@ -198,17 +216,29 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     fun importBackupDuringOnboarding(
         json: String,
         pendingProfile: UserProfile,
-        nextFeeDueIso: String
+        nextFeeDueIso: String,
+        waistCm: Double? = null,
+        chestCm: Double? = null,
+        armCm: Double? = null
     ) {
         viewModelScope.launch {
             runCatching {
                 val result = repository.importBackupJson(json)
                 if (!result.includedProfile) {
                     val savedProfile = pendingProfile.copy(
-                        name = pendingProfile.name.ifBlank { "Athlete" },
+                        name = pendingProfile.name.trim(),
+                        preferredRepRange = pendingProfile.preferredRepRange.trim().ifBlank { "15-12-10-8" },
                         onboardingComplete = true
                     )
                     repository.saveProfile(savedProfile)
+                    repository.saveMeasurements(
+                        waistCm = waistCm,
+                        chestCm = chestCm,
+                        armCm = armCm,
+                        recordHistory = true,
+                        heightCm = savedProfile.heightCm,
+                        bodyFatPercent = savedProfile.bodyFatPercent
+                    )
                     if (nextFeeDueIso.isNotBlank()) {
                         val currentFee = uiState.value.gymFee
                         repository.saveGymFee(currentFee.copy(nextDueIso = nextFeeDueIso))
@@ -223,9 +253,43 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    fun updateProfile(profile: UserProfile) {
+    fun updateProfile(
+        profile: UserProfile,
+        waistCm: Double? = uiState.value.measurements.waistCm,
+        chestCm: Double? = uiState.value.measurements.chestCm,
+        armCm: Double? = uiState.value.measurements.armCm
+    ) {
         viewModelScope.launch {
-            repository.saveProfile(profile.copy(onboardingComplete = true))
+            val prevProfile = uiState.value.profile
+            val prevMeasures = uiState.value.measurements
+            val currentLatestBw = uiState.value.bodyWeightLog.lastOrNull()?.weightKg ?: prevProfile.bodyWeightKg
+            val savedProfile = profile.copy(
+                name = profile.name.trim(),
+                preferredRepRange = profile.preferredRepRange.trim().ifBlank { "15-12-10-8" },
+                onboardingComplete = true
+            )
+            repository.saveProfile(savedProfile)
+
+            if (kotlin.math.abs(savedProfile.bodyWeightKg - currentLatestBw) > 0.001 || uiState.value.bodyWeightLog.isEmpty()) {
+                repository.logBodyWeight(savedProfile.bodyWeightKg)
+            }
+
+            val heightChanged = savedProfile.heightCm != prevProfile.heightCm
+            val bfChanged = savedProfile.bodyFatPercent != prevProfile.bodyFatPercent
+            val measuresChanged = waistCm != prevMeasures.waistCm || chestCm != prevMeasures.chestCm || armCm != prevMeasures.armCm
+
+            if (measuresChanged) {
+                repository.saveMeasurements(waistCm, chestCm, armCm, recordHistory = false)
+            }
+            if (measuresChanged || heightChanged || bfChanged) {
+                repository.recordMeasurementSnapshot(
+                    waistCm = if (measuresChanged) waistCm else null,
+                    chestCm = if (measuresChanged) chestCm else null,
+                    armCm = if (measuresChanged) armCm else null,
+                    heightCm = if (heightChanged) savedProfile.heightCm else null,
+                    bodyFatPercent = if (bfChanged) savedProfile.bodyFatPercent else null
+                )
+            }
             showToast("Profile updated")
         }
     }
@@ -248,19 +312,48 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         lastPaidIso: String,
         nextDueIso: String,
         amount: Double,
-        waistCm: Double,
-        chestCm: Double,
-        armCm: Double,
+        heightCm: Int,
+        bodyWeightKg: Double,
+        bodyFatPercent: Double?,
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?,
         weeklyTargetSessions: Int
     ) {
         viewModelScope.launch {
+            val prevProfile = uiState.value.profile
+            val prevMeasures = uiState.value.measurements
+            val currentLatestBw = uiState.value.bodyWeightLog.lastOrNull()?.weightKg ?: prevProfile.bodyWeightKg
+
             repository.saveGymFee(GymFeeRecord(lastPaidIso, nextDueIso, amount))
-            repository.saveMeasurements(waistCm, chestCm, armCm)
-            val updatedProfile = uiState.value.profile.copy(
+
+            val heightChanged = heightCm != prevProfile.heightCm
+            val weightChanged = kotlin.math.abs(bodyWeightKg - currentLatestBw) > 0.001 || uiState.value.bodyWeightLog.isEmpty()
+            val bfChanged = bodyFatPercent != prevProfile.bodyFatPercent
+            val measuresChanged = waistCm != prevMeasures.waistCm || chestCm != prevMeasures.chestCm || armCm != prevMeasures.armCm
+
+            val updatedProfile = prevProfile.copy(
+                heightCm = heightCm.coerceIn(100, 240),
+                bodyWeightKg = bodyWeightKg.coerceIn(25.0, 300.0),
+                bodyFatPercent = bodyFatPercent?.coerceIn(3.0, 65.0),
                 weeklyTargetSessions = weeklyTargetSessions.coerceIn(1, 7)
             )
             repository.saveProfile(updatedProfile)
-            showToast("Settings saved successfully")
+
+            if (weightChanged) {
+                repository.logBodyWeight(updatedProfile.bodyWeightKg)
+            }
+            repository.saveMeasurements(waistCm, chestCm, armCm, recordHistory = false)
+            if (measuresChanged || heightChanged || bfChanged) {
+                repository.recordMeasurementSnapshot(
+                    waistCm = if (measuresChanged) waistCm else null,
+                    chestCm = if (measuresChanged) chestCm else null,
+                    armCm = if (measuresChanged) armCm else null,
+                    heightCm = if (heightChanged) updatedProfile.heightCm else null,
+                    bodyFatPercent = if (bfChanged) updatedProfile.bodyFatPercent else null
+                )
+            }
+            showToast("Profile saved successfully")
         }
     }
 
@@ -315,7 +408,8 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             fees = st.gymFee,
             bodyWeights = st.bodyWeightLog,
             sessions = st.sessions,
-            customExercises = st.customExercises
+            customExercises = st.customExercises,
+            measurementLog = st.measurementLog
         )
     }
 
@@ -412,9 +506,9 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
                     DraftSet(
                         repsText = st.reps.toString(),
                         weightText = if (st.weightKg == 0.0) "0" else WorkoutMath.formatKg(st.weightKg),
-                        isCompleted = st.isCompleted
+                        isCompleted = true
                     )
-                }.ifEmpty { listOf(DraftSet("10", "0", false)) },
+                }.ifEmpty { listOf(DraftSet("10", "0", true)) },
                 rpe = ex.rpe,
                 note = ex.note
             )
@@ -521,9 +615,9 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             )
         } else {
             val defaultWeight = if (isBodyweight) "0" else "20"
-            listOf("15", "12", "10").map { reps ->
+            initialRepsForRange(st.profile.preferredRepRange, count = 3).map { reps ->
                 DraftSet(
-                    repsText = reps,
+                    repsText = reps.toString(),
                     weightText = defaultWeight,
                     isCompleted = false
                 )
@@ -584,7 +678,9 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun addSetToExercise(localId: String) {
-        val allEx = uiState.value.allExercises
+        val st = uiState.value
+        val allEx = st.allExercises
+        val preferredRange = st.profile.preferredRepRange
         _activeDraft.update { d ->
             d?.copy(
                 exercises = d.exercises.map { ex ->
@@ -595,7 +691,7 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
                         val nextReps = if (isCardio) {
                             template.repsText
                         } else {
-                            nextPyramidReps(ex.sets) ?: template.repsText
+                            nextRepForSetCount(ex.sets, preferredRange) ?: template.repsText
                         }
                         ex.copy(sets = ex.sets + template.copy(repsText = nextReps, isCompleted = false))
                     }
@@ -708,6 +804,11 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
             return
         }
         val wasEditing = rawDraft.editingSessionIds.isNotEmpty()
+        val tickedSetsCount = WorkoutMath.draftSetCount(rawDraft, onlyCompleted = !wasEditing)
+        if (!wasEditing && tickedSetsCount == 0) {
+            showToast("Tap the tick button on at least one completed set before finishing", ToastTone.WARNING)
+            return
+        }
         val draft = if (wasEditing) {
             rawDraft
         } else {
@@ -715,8 +816,13 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         }
         viewModelScope.launch {
             val allEx = uiState.value.allExercises
-            val vol = WorkoutMath.draftVolume(draft, allEx)
-            val kcal = WorkoutMath.estimateDraftCalories(draft, uiState.value.profile.bodyWeightKg, allEx)
+            val vol = WorkoutMath.draftVolume(draft, allEx, onlyCompleted = !wasEditing)
+            val kcal = WorkoutMath.estimateDraftCalories(
+                draft = draft,
+                bodyWeightKg = uiState.value.profile.bodyWeightKg,
+                allExercises = allEx,
+                onlyCompleted = !wasEditing
+            )
             repository.saveCompletedDraft(draft)
             timerJob?.cancel()
             timerAnchorElapsedMs = null
@@ -829,6 +935,19 @@ class WorkoutTrackerViewModel(application: Application) : AndroidViewModel(appli
         ): Int {
             val deltaSeconds = ((nowElapsedRealtimeMs - anchorElapsedRealtimeMs).coerceAtLeast(0L) / 1_000L).toInt()
             return (baseSeconds + deltaSeconds).coerceAtLeast(0)
+        }
+
+        internal fun initialRepsForRange(preferredRepRange: String, count: Int = 3): List<Int> {
+            val parsed = ExerciseCatalog.parseRepRange(preferredRepRange)
+            return List(count) { idx ->
+                parsed.getOrElse(idx) { parsed.last() }
+            }
+        }
+
+        internal fun nextRepForSetCount(existingSets: List<DraftSet>, preferredRepRange: String): String? {
+            val parsed = ExerciseCatalog.parseRepRange(preferredRepRange)
+            val nextIdx = existingSets.size
+            return if (nextIdx < parsed.size) parsed[nextIdx].toString() else null
         }
 
         internal fun nextPyramidReps(existingSets: List<DraftSet>): String? {

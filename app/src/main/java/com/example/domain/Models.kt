@@ -18,24 +18,38 @@ enum class PhotoSlot(val label: String, val fileName: String) {
 
 data class UserProfile(
     val name: String = "",
-    val age: Int = 25,
-    val gender: String = "Male",
+    val age: Int? = null,
+    val gender: String = "",
     val heightCm: Int = 175,
     val bodyWeightKg: Double = 74.5,
     val bodyFatPercent: Double? = null,
-    val experienceLevel: String = "Intermediate",
+    val experienceLevel: String = "",
     val preferredSplit: String = "Push / Pull / Legs (PPL)",
+    val preferredRepRange: String = "15-12-10-8",
     val weeklyTargetSessions: Int = 4,
     val onboardingComplete: Boolean = false
 )
 
 data class BodyMeasurements(
-    val waistCm: Double = 82.0,
-    val chestCm: Double = 102.0,
-    val armCm: Double = 35.0,
+    val waistCm: Double? = null,
+    val chestCm: Double? = null,
+    val armCm: Double? = null,
     val frontPhotoPath: String? = null,
+    val frontPhotoDateIso: String? = null,
     val sidePhotoPath: String? = null,
-    val backPhotoPath: String? = null
+    val sidePhotoDateIso: String? = null,
+    val backPhotoPath: String? = null,
+    val backPhotoDateIso: String? = null
+)
+
+data class BodyMeasurementEntry(
+    val id: Long = 0,
+    val dateIso: String,
+    val waistCm: Double? = null,
+    val chestCm: Double? = null,
+    val armCm: Double? = null,
+    val heightCm: Int? = null,
+    val bodyFatPercent: Double? = null
 )
 
 data class GymFeeRecord(

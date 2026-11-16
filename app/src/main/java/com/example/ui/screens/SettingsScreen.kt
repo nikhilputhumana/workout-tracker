@@ -87,9 +87,12 @@ fun SettingsScreen(
         lastPaidIso: String,
         nextDueIso: String,
         amount: Double,
-        waistCm: Double,
-        chestCm: Double,
-        armCm: Double,
+        heightCm: Int,
+        bodyWeightKg: Double,
+        bodyFatPercent: Double?,
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?,
         weeklyTargetSessions: Int
     ) -> Unit,
     onMarkFeePaidToday: () -> Unit,
@@ -106,6 +109,11 @@ fun SettingsScreen(
     val profile = uiState.profile
     val todayIso = WorkoutMath.todayIso()
 
+    val bwLog = uiState.bodyWeightLog
+    val latestBw = bwLog.lastOrNull()?.weightKg ?: profile.bodyWeightKg
+    val rawBwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
+    val bwDelta = if (kotlin.math.abs(rawBwDelta) < 0.05) 0.0 else rawBwDelta
+
     var lastPaidIso by remember(uiState.gymFee.lastPaidIso) {
         mutableStateOf(uiState.gymFee.lastPaidIso)
     }
@@ -115,29 +123,50 @@ fun SettingsScreen(
     var amountText by remember(uiState.gymFee.amount) {
         mutableStateOf(WorkoutMath.formatKg(uiState.gymFee.amount))
     }
+    var heightText by remember(profile.heightCm) {
+        mutableStateOf(profile.heightCm.toString())
+    }
+    var weightText by remember(latestBw) {
+        mutableStateOf(WorkoutMath.formatKg(latestBw))
+    }
+    var bfText by remember(profile.bodyFatPercent) {
+        mutableStateOf(profile.bodyFatPercent?.let { WorkoutMath.formatKg(it) } ?: "")
+    }
     var waistText by remember(uiState.measurements.waistCm) {
-        mutableStateOf(WorkoutMath.formatKg(uiState.measurements.waistCm))
+        mutableStateOf(uiState.measurements.waistCm?.let { WorkoutMath.formatKg(it) } ?: "")
     }
     var chestText by remember(uiState.measurements.chestCm) {
-        mutableStateOf(WorkoutMath.formatKg(uiState.measurements.chestCm))
+        mutableStateOf(uiState.measurements.chestCm?.let { WorkoutMath.formatKg(it) } ?: "")
     }
     var armText by remember(uiState.measurements.armCm) {
-        mutableStateOf(WorkoutMath.formatKg(uiState.measurements.armCm))
+        mutableStateOf(uiState.measurements.armCm?.let { WorkoutMath.formatKg(it) } ?: "")
     }
     var weeklyTarget by remember(profile.weeklyTargetSessions) {
         mutableIntStateOf(profile.weeklyTargetSessions.coerceIn(1, 7))
     }
 
     val parsedAmount = amountText.toDoubleOrNull()
-    val parsedWaist = waistText.toDoubleOrNull()
-    val parsedChest = chestText.toDoubleOrNull()
-    val parsedArm = armText.toDoubleOrNull()
+    val parsedHeight = heightText.toIntOrNull()
+    val parsedWeight = weightText.toDoubleOrNull()
+    val parsedBf = if (bfText.isBlank()) null else bfText.toDoubleOrNull()
+    val parsedWaist = if (waistText.isBlank()) null else waistText.toDoubleOrNull()
+    val parsedChest = if (chestText.isBlank()) null else chestText.toDoubleOrNull()
+    val parsedArm = if (armText.isBlank()) null else armText.toDoubleOrNull()
 
     val amountError = if (parsedAmount == null || parsedAmount <= 0.0 || parsedAmount > 1_000_000.0) "Enter > 0" else null
-    val waistError = if (parsedWaist == null || parsedWaist !in 30.0..250.0) "30–250" else null
-    val chestError = if (parsedChest == null || parsedChest !in 40.0..250.0) "40–250" else null
-    val armError = if (parsedArm == null || parsedArm !in 15.0..100.0) "15–100" else null
-    val allInputsValid = amountError == null && waistError == null && chestError == null && armError == null
+    val heightError = if (parsedHeight == null || parsedHeight !in 100..240) "100–240" else null
+    val weightError = if (parsedWeight == null || parsedWeight !in 25.0..300.0) "25–300" else null
+    val bfError = if (bfText.isNotBlank() && (parsedBf == null || parsedBf !in 3.0..65.0)) "3–65%" else null
+    val waistError = if (waistText.isNotBlank() && (parsedWaist == null || parsedWaist !in 30.0..250.0)) "30–250" else null
+    val chestError = if (chestText.isNotBlank() && (parsedChest == null || parsedChest !in 40.0..250.0)) "40–250" else null
+    val armError = if (armText.isNotBlank() && (parsedArm == null || parsedArm !in 15.0..100.0)) "15–100" else null
+    val allInputsValid = amountError == null &&
+        heightError == null &&
+        weightError == null &&
+        bfError == null &&
+        waistError == null &&
+        chestError == null &&
+        armError == null
 
     fun sanitizeDecimal(input: String): String = buildString {
         var dotSeen = false
@@ -150,10 +179,20 @@ fun SettingsScreen(
         }
     }.take(7)
 
+    val weightChanged = parsedWeight == null || kotlin.math.abs(parsedWeight - latestBw) > 0.001
+    val bfChanged = if (parsedBf != null && profile.bodyFatPercent != null) {
+        kotlin.math.abs(parsedBf - profile.bodyFatPercent) > 0.001
+    } else {
+        (bfText.isNotBlank()) != (profile.bodyFatPercent != null) || parsedBf != profile.bodyFatPercent
+    }
+
     val hasUnsavedChanges =
         lastPaidIso != uiState.gymFee.lastPaidIso ||
             nextDueIso != uiState.gymFee.nextDueIso ||
             parsedAmount != uiState.gymFee.amount ||
+            parsedHeight != profile.heightCm ||
+            weightChanged ||
+            bfChanged ||
             parsedWaist != uiState.measurements.waistCm ||
             parsedChest != uiState.measurements.chestCm ||
             parsedArm != uiState.measurements.armCm ||
@@ -185,12 +224,10 @@ fun SettingsScreen(
         else -> Triple(palette.greenSoft, palette.greenInk, "Paid")
     }
 
-    val bwLog = uiState.bodyWeightLog
-    val latestBw = bwLog.lastOrNull()?.weightKg ?: profile.bodyWeightKg
-    val rawBwDelta = if (bwLog.size >= 2) bwLog.last().weightKg - bwLog.first().weightKg else 0.0
-    val bwDelta = if (kotlin.math.abs(rawBwDelta) < 0.05) 0.0 else rawBwDelta
-    val heightM = (profile.heightCm / 100.0).coerceAtLeast(1.0)
-    val bmi = latestBw / heightM.pow(2.0)
+    val effectiveHeightCm = parsedHeight?.takeIf { it in 100..240 } ?: profile.heightCm
+    val effectiveWeightKg = parsedWeight?.takeIf { it in 25.0..300.0 } ?: latestBw
+    val bmi = WorkoutMath.calculateBmi(effectiveWeightKg, effectiveHeightCm)
+    val bmiCategory = WorkoutMath.bmiCategory(bmi)
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedContainerColor = palette.surface,
@@ -203,17 +240,19 @@ fun SettingsScreen(
 
     fun commitSave() {
         val validAmount = parsedAmount ?: return
-        val validWaist = parsedWaist ?: return
-        val validChest = parsedChest ?: return
-        val validArm = parsedArm ?: return
+        val validHeight = parsedHeight ?: return
+        val validWeight = parsedWeight ?: return
         if (!allInputsValid) return
         onSaveSettingsChanges(
             lastPaidIso,
             nextDueIso,
             validAmount,
-            validWaist,
-            validChest,
-            validArm,
+            validHeight,
+            validWeight,
+            parsedBf,
+            parsedWaist,
+            parsedChest,
+            parsedArm,
             weeklyTarget
         )
     }
@@ -258,10 +297,19 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = palette.text
                             )
+                            val profileParts = listOfNotNull(
+                                profile.age?.let { "$it yrs" },
+                                profile.gender.ifBlank { null },
+                                "${profile.heightCm} cm",
+                                profile.experienceLevel.ifBlank { null },
+                                profile.preferredRepRange.ifBlank { null }?.let { "Reps $it" },
+                                profile.preferredSplit.ifBlank { null }
+                            )
                             Text(
-                                text = "${profile.age} · ${profile.gender} · ${profile.heightCm} cm · ${profile.experienceLevel} · ${profile.preferredSplit}",
+                                text = profileParts.joinToString(" · "),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = palette.muted
+                                color = palette.muted,
+                                modifier = Modifier.testTag("profile_summary_subtitle")
                             )
                         }
                         OutlinedButton(
@@ -483,27 +531,83 @@ fun SettingsScreen(
                             ) {
                                 MiniBodyStat(
                                     label = "Weight",
-                                    value = "${WorkoutMath.formatKg(latestBw)} kg",
-                                    sub = if (bwLog.size >= 2) "${if (bwDelta > 0) "+" else ""}${String.format(Locale.US, "%.1f", bwDelta)} kg" else "logged",
+                                    value = "${WorkoutMath.formatKg(effectiveWeightKg)} kg",
+                                    sub = if (bwLog.size >= 2) "${if (bwDelta > 0) "+" else ""}${String.format(Locale.US, "%.1f", bwDelta)} kg" else "current",
                                     subColor = if (bwDelta < 0) palette.greenInk else palette.muted,
                                     modifier = Modifier.weight(1f)
                                 )
-                                MiniBodyStat(
-                                    label = "Body fat",
-                                    value = profile.bodyFatPercent?.let { "${WorkoutMath.formatKg(it)}%" } ?: "—",
-                                    sub = "optional",
-                                    modifier = Modifier.weight(1f)
-                                )
+                                parsedBf?.takeIf { bfError == null }?.let { bf ->
+                                    MiniBodyStat(
+                                        label = "Body fat",
+                                        value = "${WorkoutMath.formatKg(bf)}%",
+                                        sub = "optional",
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                                 MiniBodyStat(
                                     label = "BMI",
                                     value = String.format(Locale.US, "%.1f", bmi),
-                                    sub = "height & weight",
-                                    modifier = Modifier.weight(1f)
+                                    sub = bmiCategory,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_bmi_stat")
                                 )
                             }
 
                             Text(
-                                text = "Measurements (cm)",
+                                text = "Height, Weight & Fat %",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = palette.text2
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = heightText,
+                                    onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
+                                    label = { Text("Height (cm)") },
+                                    isError = heightError != null,
+                                    supportingText = heightError?.let { msg -> { Text(msg) } },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    colors = fieldColors,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_height_input")
+                                )
+                                OutlinedTextField(
+                                    value = weightText,
+                                    onValueChange = { weightText = sanitizeDecimal(it).take(6) },
+                                    label = { Text("Weight (kg)") },
+                                    isError = weightError != null,
+                                    supportingText = weightError?.let { msg -> { Text(msg) } },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = fieldColors,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_weight_input")
+                                )
+                                OutlinedTextField(
+                                    value = bfText,
+                                    onValueChange = { bfText = sanitizeDecimal(it).take(5) },
+                                    label = { Text("Fat %") },
+                                    placeholder = { Text("Optional") },
+                                    isError = bfError != null,
+                                    supportingText = bfError?.let { msg -> { Text(msg) } },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = fieldColors,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("settings_body_fat_input")
+                                )
+                            }
+
+                            Text(
+                                text = "Body measurements, cm (Optional)",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = palette.text2
@@ -516,6 +620,7 @@ fun SettingsScreen(
                                     value = waistText,
                                     onValueChange = { waistText = sanitizeDecimal(it) },
                                     label = { Text("Waist") },
+                                    placeholder = { Text("Optional") },
                                     isError = waistError != null,
                                     supportingText = waistError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
@@ -529,6 +634,7 @@ fun SettingsScreen(
                                     value = chestText,
                                     onValueChange = { chestText = sanitizeDecimal(it) },
                                     label = { Text("Chest") },
+                                    placeholder = { Text("Optional") },
                                     isError = chestError != null,
                                     supportingText = chestError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
@@ -542,6 +648,7 @@ fun SettingsScreen(
                                     value = armText,
                                     onValueChange = { armText = sanitizeDecimal(it) },
                                     label = { Text("Arm") },
+                                    placeholder = { Text("Optional") },
                                     isError = armError != null,
                                     supportingText = armError?.let { msg -> { Text(msg) } },
                                     singleLine = true,
@@ -578,7 +685,7 @@ fun SettingsScreen(
                                     text = when {
                                         !allInputsValid -> "Fix invalid numbers"
                                         hasUnsavedChanges -> "Save changes"
-                                        else -> "All settings saved"
+                                        else -> "All profile changes saved"
                                     },
                                     fontWeight = FontWeight.SemiBold
                                 )
@@ -595,14 +702,15 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 PhotoSlot.entries.forEach { slot ->
-                                    val path = when (slot) {
-                                        PhotoSlot.FRONT -> uiState.measurements.frontPhotoPath
-                                        PhotoSlot.SIDE -> uiState.measurements.sidePhotoPath
-                                        PhotoSlot.BACK -> uiState.measurements.backPhotoPath
+                                    val (path, photoDate) = when (slot) {
+                                        PhotoSlot.FRONT -> uiState.measurements.frontPhotoPath to uiState.measurements.frontPhotoDateIso
+                                        PhotoSlot.SIDE -> uiState.measurements.sidePhotoPath to uiState.measurements.sidePhotoDateIso
+                                        PhotoSlot.BACK -> uiState.measurements.backPhotoPath to uiState.measurements.backPhotoDateIso
                                     }
                                     ProgressPhotoSlotBox(
                                         label = slot.label,
                                         photoPath = path,
+                                        photoDateIso = photoDate,
                                         onPick = {
                                             activePhotoSlot = slot
                                             photoPickerLauncher.launch(
@@ -850,7 +958,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        text = if (!allInputsValid) "Fix invalid numbers before saving" else "You have unsaved settings changes",
+                        text = if (!allInputsValid) "Fix invalid numbers before saving" else "You have unsaved profile changes",
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                         color = if (!allInputsValid) palette.redInk else palette.brandInk,
@@ -971,6 +1079,7 @@ private fun MiniBodyStat(
 private fun ProgressPhotoSlotBox(
     label: String,
     photoPath: String?,
+    photoDateIso: String?,
     onPick: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier
@@ -1015,13 +1124,13 @@ private fun ProgressPhotoSlotBox(
                     )
                 }
             }
-            Box(
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
-                    .background(Color.Black.copy(alpha = 0.55f))
-                    .padding(vertical = 3.dp),
-                contentAlignment = Alignment.Center
+                    .background(Color.Black.copy(alpha = 0.62f))
+                    .padding(vertical = 3.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
                     text = label.uppercase(),
@@ -1029,6 +1138,13 @@ private fun ProgressPhotoSlotBox(
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
+                if (!photoDateIso.isNullOrBlank()) {
+                    Text(
+                        text = WorkoutMath.formatDayMonth(photoDateIso),
+                        fontSize = 9.sp,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+                }
             }
         } else {
             Column(

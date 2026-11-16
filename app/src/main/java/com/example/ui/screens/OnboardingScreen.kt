@@ -1,14 +1,22 @@
 package com.example.ui.screens
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,13 +25,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Star
@@ -50,37 +62,73 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.example.domain.BodyMeasurements
 import com.example.domain.ExerciseCatalog
+import com.example.domain.PhotoSlot
 import com.example.domain.UserProfile
 import com.example.domain.WorkoutMath
 import com.example.ui.components.BorderedCard
 import com.example.ui.components.rememberDatePickerLauncher
 import com.example.ui.theme.LocalWorkoutPalette
+import java.io.File
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OnboardingScreen(
     initialProfile: UserProfile,
+    initialMeasurements: BodyMeasurements = BodyMeasurements(),
     initialNextFeeIso: String,
     startStep: Int = 1,
     isEditOnly: Boolean = false,
-    onComplete: (profile: UserProfile, nextFeeIso: String) -> Unit,
-    onImportLog: (profile: UserProfile, nextFeeIso: String) -> Unit = { _, _ -> },
+    onComplete: (
+        profile: UserProfile,
+        nextFeeIso: String,
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?
+    ) -> Unit,
+    onImportLog: (
+        profile: UserProfile,
+        nextFeeIso: String,
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?
+    ) -> Unit = { _, _, _, _, _ -> },
+    onSelectProgressPhoto: ((PhotoSlot, Uri) -> Unit)? = null,
+    onClearProgressPhoto: ((PhotoSlot) -> Unit)? = null,
     onCancelEdit: (() -> Unit)? = null
 ) {
     val palette = LocalWorkoutPalette.current
     var step by remember(startStep) { mutableIntStateOf(startStep) }
     var name by remember { mutableStateOf(initialProfile.name) }
-    var ageText by remember { mutableStateOf(initialProfile.age.toString()) }
+    var ageText by remember { mutableStateOf(initialProfile.age?.toString() ?: "") }
     var heightText by remember { mutableStateOf(initialProfile.heightCm.toString()) }
     var weightText by remember { mutableStateOf(WorkoutMath.formatKg(initialProfile.bodyWeightKg)) }
     var bfText by remember { mutableStateOf(initialProfile.bodyFatPercent?.let { WorkoutMath.formatKg(it) } ?: "") }
     var gender by remember { mutableStateOf(initialProfile.gender) }
     var level by remember { mutableStateOf(initialProfile.experienceLevel) }
+    var repRangeField by remember {
+        val initRange = initialProfile.preferredRepRange.ifBlank { "15-12-10-8" }
+        mutableStateOf(TextFieldValue(initRange, TextRange(initRange.length)))
+    }
+    var waistText by remember { mutableStateOf(initialMeasurements.waistCm?.let { WorkoutMath.formatKg(it) } ?: "") }
+    var chestText by remember { mutableStateOf(initialMeasurements.chestCm?.let { WorkoutMath.formatKg(it) } ?: "") }
+    var armText by remember { mutableStateOf(initialMeasurements.armCm?.let { WorkoutMath.formatKg(it) } ?: "") }
     var split by remember {
         mutableStateOf(
             if (ExerciseCatalog.TRAINING_SPLITS.any { it.name == initialProfile.preferredSplit }) {
@@ -94,6 +142,15 @@ fun OnboardingScreen(
         mutableStateOf(initialNextFeeIso.ifBlank { WorkoutMath.isoOffsetMonths(1) })
     }
 
+    var activePhotoSlot by remember { mutableStateOf(PhotoSlot.FRONT) }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            onSelectProgressPhoto?.invoke(activePhotoSlot, uri)
+        }
+    }
+
     BackHandler(enabled = !isEditOnly && step > 1) {
         step--
     }
@@ -102,15 +159,27 @@ fun OnboardingScreen(
         nextFeeIso = picked
     }
 
-    val ageInt = ageText.toIntOrNull()
-    val ageError = if (ageInt == null || ageInt !in 12..100) "Enter 12–100" else null
+    val nameError = if (name.trim().isEmpty()) "Required · enter your name" else null
     val heightInt = heightText.toIntOrNull()
-    val heightError = if (heightInt == null || heightInt !in 100..240) "Enter 100–240" else null
+    val heightError = if (heightInt == null || heightInt !in 100..240) "Required · 100–240" else null
     val weightDouble = weightText.toDoubleOrNull()
-    val weightError = if (weightDouble == null || weightDouble !in 25.0..300.0) "Enter 25–300 kg" else null
+    val weightError = if (weightDouble == null || weightDouble !in 25.0..300.0) "Required · 25–300 kg" else null
+
+    val ageInt = ageText.toIntOrNull()
+    val ageError = if (ageInt == null || ageInt !in 12..100) "Required · 12–100" else null
     val bfDouble = bfText.toDoubleOrNull()
     val bfError = if (bfText.isNotBlank() && (bfDouble == null || bfDouble !in 3.0..65.0)) "Enter 3–65%" else null
-    val metricsValid = ageError == null && heightError == null && weightError == null && bfError == null
+
+    val waistDouble = waistText.toDoubleOrNull()
+    val waistError = if (waistText.isNotBlank() && (waistDouble == null || waistDouble !in 30.0..250.0)) "30–250" else null
+    val chestDouble = chestText.toDoubleOrNull()
+    val chestError = if (chestText.isNotBlank() && (chestDouble == null || chestDouble !in 40.0..250.0)) "40–250" else null
+    val armDouble = armText.toDoubleOrNull()
+    val armError = if (armText.isNotBlank() && (armDouble == null || armDouble !in 15.0..100.0)) "15–100" else null
+
+    val metricsValid = nameError == null && heightError == null && weightError == null &&
+        ageError == null && bfError == null &&
+        waistError == null && chestError == null && armError == null
 
     fun sanitizeDecimal(input: String): String = buildString {
         var dotSeen = false
@@ -123,18 +192,44 @@ fun OnboardingScreen(
         }
     }.take(6)
 
+    fun sanitizeRepRange(input: String): String = buildString {
+        for (ch in input) {
+            val mapped = if (ch == '\n' || ch == '\r') '-' else ch
+            if (mapped.isDigit()) {
+                append(mapped)
+            } else if (mapped == '-' && isNotEmpty() && last() != '-') {
+                append('-')
+            }
+        }
+    }.take(24)
+
+    fun insertHyphenAtRepCursor() {
+        val text = repRangeField.text
+        val start = repRangeField.selection.start.coerceIn(0, text.length)
+        val end = repRangeField.selection.end.coerceIn(0, text.length)
+        val raw = text.substring(0, start) + "-" + text.substring(end)
+        val sanitized = sanitizeRepRange(raw)
+        val cursor = (start + 1).coerceAtMost(sanitized.length)
+        repRangeField = TextFieldValue(sanitized, TextRange(cursor))
+    }
+
     fun buildProfile(): UserProfile = UserProfile(
         name = name.trim(),
-        age = ageInt?.coerceIn(12, 100) ?: initialProfile.age.coerceIn(12, 100),
-        gender = gender,
+        age = ageInt?.coerceIn(12, 100) ?: initialProfile.age?.coerceIn(12, 100),
+        gender = gender.trim(),
         heightCm = heightInt?.coerceIn(100, 240) ?: initialProfile.heightCm.coerceIn(100, 240),
         bodyWeightKg = weightDouble?.coerceIn(25.0, 300.0) ?: initialProfile.bodyWeightKg.coerceIn(25.0, 300.0),
         bodyFatPercent = if (bfText.isBlank()) null else bfDouble?.coerceIn(3.0, 65.0),
-        experienceLevel = level,
+        experienceLevel = level.trim(),
         preferredSplit = split,
+        preferredRepRange = repRangeField.text.trim('-').ifBlank { "15-12-10-8" },
         weeklyTargetSessions = initialProfile.weeklyTargetSessions,
         onboardingComplete = true
     )
+
+    fun parsedWaist(): Double? = if (waistText.isBlank()) null else waistDouble?.coerceIn(30.0, 250.0)
+    fun parsedChest(): Double? = if (chestText.isBlank()) null else chestDouble?.coerceIn(40.0, 250.0)
+    fun parsedArm(): Double? = if (armText.isBlank()) null else armDouble?.coerceIn(15.0, 100.0)
 
     Column(
         modifier = Modifier
@@ -169,7 +264,7 @@ fun OnboardingScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Body metrics & training experience",
+                            text = "Body metrics, measurements & rep range",
                             style = MaterialTheme.typography.bodySmall,
                             color = palette.muted
                         )
@@ -263,7 +358,7 @@ fun OnboardingScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Used for calorie estimates and strength trends. Editable in Settings.",
+                            text = "Name, age, height, and body weight are required. Everything else is optional and can be updated later in Profile.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = palette.muted
                         )
@@ -281,8 +376,10 @@ fun OnboardingScreen(
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it },
-                        label = { Text("Name") },
+                        label = { Text("Name *") },
                         placeholder = { Text("Your name") },
+                        isError = nameError != null,
+                        supportingText = nameError?.let { msg -> { Text(msg) } },
                         singleLine = true,
                         colors = fieldColors,
                         modifier = Modifier
@@ -292,9 +389,39 @@ fun OnboardingScreen(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         OutlinedTextField(
+                            value = heightText,
+                            onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
+                            label = { Text("Height (cm) *") },
+                            isError = heightError != null,
+                            supportingText = heightError?.let { msg -> { Text(msg) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            colors = fieldColors,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("profile_height_input")
+                        )
+                        OutlinedTextField(
+                            value = weightText,
+                            onValueChange = { weightText = sanitizeDecimal(it) },
+                            label = { Text("Body weight (kg) *") },
+                            isError = weightError != null,
+                            supportingText = weightError?.let { msg -> { Text(msg) } },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            colors = fieldColors,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("profile_weight_input")
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
                             value = ageText,
                             onValueChange = { ageText = it.filter { c -> c.isDigit() }.take(3) },
-                            label = { Text("Age") },
+                            label = { Text("Age *") },
+                            placeholder = { Text("e.g. 26") },
                             isError = ageError != null,
                             supportingText = ageError?.let { msg -> { Text(msg) } },
                             singleLine = true,
@@ -305,38 +432,10 @@ fun OnboardingScreen(
                                 .testTag("profile_age_input")
                         )
                         OutlinedTextField(
-                            value = heightText,
-                            onValueChange = { heightText = it.filter { c -> c.isDigit() }.take(3) },
-                            label = { Text("Height (cm)") },
-                            isError = heightError != null,
-                            supportingText = heightError?.let { msg -> { Text(msg) } },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            colors = fieldColors,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("profile_height_input")
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        OutlinedTextField(
-                            value = weightText,
-                            onValueChange = { weightText = sanitizeDecimal(it) },
-                            label = { Text("Body weight (kg)") },
-                            isError = weightError != null,
-                            supportingText = weightError?.let { msg -> { Text(msg) } },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            colors = fieldColors,
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("profile_weight_input")
-                        )
-                        OutlinedTextField(
                             value = bfText,
                             onValueChange = { bfText = sanitizeDecimal(it) },
-                            label = { Text("Body fat % (opt)") },
+                            label = { Text("Body fat % (optional)") },
+                            placeholder = { Text("e.g. 15") },
                             isError = bfError != null,
                             supportingText = bfError?.let { msg -> { Text(msg) } },
                             singleLine = true,
@@ -348,19 +447,159 @@ fun OnboardingScreen(
                         )
                     }
 
-                    ChoiceRow(
-                        label = "Gender",
+                    OptionalChoiceRow(
+                        label = "Gender (optional · tap again to clear)",
                         options = listOf("Male", "Female", "Other"),
                         selected = gender,
-                        onSelect = { gender = it }
+                        onSelect = { opt -> gender = if (gender == opt) "" else opt }
                     )
 
-                    ChoiceRow(
-                        label = "Experience",
+                    OptionalChoiceRow(
+                        label = "Experience (optional · tap again to clear)",
                         options = listOf("Beginner", "Intermediate", "Advanced"),
                         selected = level,
-                        onSelect = { level = it }
+                        onSelect = { opt -> level = if (level == opt) "" else opt }
                     )
+
+                    // Preferred Rep Range (digits + '-' only; Enter inserts '-')
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Preferred rep range",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.text2
+                        )
+                        OutlinedTextField(
+                            value = repRangeField,
+                            onValueChange = { incoming ->
+                                val sanitized = sanitizeRepRange(incoming.text)
+                                val cursor = incoming.selection.end.coerceIn(0, sanitized.length)
+                                repRangeField = TextFieldValue(sanitized, TextRange(cursor))
+                            },
+                            placeholder = { Text("15-12-10-8") },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = { insertHyphenAtRepCursor() },
+                                onNext = { insertHyphenAtRepCursor() },
+                                onGo = { insertHyphenAtRepCursor() },
+                                onSend = { insertHyphenAtRepCursor() }
+                            ),
+                            singleLine = false,
+                            maxLines = 1,
+                            colors = fieldColors,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onPreviewKeyEvent { event ->
+                                    if (event.type == KeyEventType.KeyDown &&
+                                        (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                    ) {
+                                        insertHyphenAtRepCursor()
+                                        true
+                                    } else {
+                                        false
+                                    }
+                                }
+                                .testTag("onboarding_rep_range_input")
+                        )
+                    }
+
+                    // Body Measurements (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Body measurements, cm (Optional)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.text2
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = waistText,
+                                onValueChange = { waistText = sanitizeDecimal(it) },
+                                label = { Text("Waist") },
+                                placeholder = { Text("Optional") },
+                                isError = waistError != null,
+                                supportingText = waistError?.let { msg -> { Text(msg) } },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = fieldColors,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("onboarding_waist_input")
+                            )
+                            OutlinedTextField(
+                                value = chestText,
+                                onValueChange = { chestText = sanitizeDecimal(it) },
+                                label = { Text("Chest") },
+                                placeholder = { Text("Optional") },
+                                isError = chestError != null,
+                                supportingText = chestError?.let { msg -> { Text(msg) } },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = fieldColors,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("onboarding_chest_input")
+                            )
+                            OutlinedTextField(
+                                value = armText,
+                                onValueChange = { armText = sanitizeDecimal(it) },
+                                label = { Text("Arm") },
+                                placeholder = { Text("Optional") },
+                                isError = armError != null,
+                                supportingText = armError?.let { msg -> { Text(msg) } },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                colors = fieldColors,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("onboarding_arm_input")
+                            )
+                        }
+                    }
+
+                    // Progress Photos (optional)
+                    if (onSelectProgressPhoto != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Progress photos (optional · stored on device)",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = palette.text2
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                PhotoSlot.entries.forEach { slot ->
+                                    val path = when (slot) {
+                                        PhotoSlot.FRONT -> initialMeasurements.frontPhotoPath
+                                        PhotoSlot.SIDE -> initialMeasurements.sidePhotoPath
+                                        PhotoSlot.BACK -> initialMeasurements.backPhotoPath
+                                    }
+                                    OnboardingPhotoSlotBox(
+                                        label = slot.label,
+                                        photoPath = path,
+                                        onPick = {
+                                            activePhotoSlot = slot
+                                            photoPickerLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        },
+                                        onRemove = { onClearProgressPhoto?.invoke(slot) },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("onboarding_photo_${slot.name.lowercase()}")
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 3 -> {
@@ -461,7 +700,9 @@ fun OnboardingScreen(
                                 color = palette.muted
                             )
                             OutlinedButton(
-                                onClick = { onImportLog(buildProfile(), nextFeeIso) },
+                                onClick = {
+                                    onImportLog(buildProfile(), nextFeeIso, parsedWaist(), parsedChest(), parsedArm())
+                                },
                                 shape = RoundedCornerShape(6.dp),
                                 border = BorderStroke(1.dp, palette.brandBd),
                                 modifier = Modifier
@@ -509,7 +750,9 @@ fun OnboardingScreen(
                         Text("Cancel", color = palette.muted)
                     }
                     Button(
-                        onClick = { onComplete(buildProfile(), nextFeeIso) },
+                        onClick = {
+                            onComplete(buildProfile(), nextFeeIso, parsedWaist(), parsedChest(), parsedArm())
+                        },
                         enabled = metricsValid,
                         shape = RoundedCornerShape(6.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.brand),
@@ -521,20 +764,23 @@ fun OnboardingScreen(
                         Text("Save profile", color = Color.White)
                     }
                 } else {
-                    TextButton(
-                        onClick = {
-                            if (step > 1) step-- else onComplete(buildProfile(), nextFeeIso)
-                        },
-                        modifier = Modifier
-                            .heightIn(min = 48.dp)
-                            .testTag("onboarding_skip_or_back_button")
-                    ) {
-                        Text(if (step > 1) "Back" else "Skip", color = palette.muted)
+                    if (step > 1 || metricsValid) {
+                        TextButton(
+                            onClick = {
+                                if (step > 1) step--
+                                else onComplete(buildProfile(), nextFeeIso, parsedWaist(), parsedChest(), parsedArm())
+                            },
+                            modifier = Modifier
+                                .heightIn(min = 48.dp)
+                                .testTag("onboarding_skip_or_back_button")
+                        ) {
+                            Text(if (step > 1) "Back" else "Skip", color = palette.muted)
+                        }
                     }
                     Button(
                         onClick = {
                             if (step < 3) step++
-                            else onComplete(buildProfile(), nextFeeIso)
+                            else onComplete(buildProfile(), nextFeeIso, parsedWaist(), parsedChest(), parsedArm())
                         },
                         enabled = step != 2 || metricsValid,
                         shape = RoundedCornerShape(6.dp),
@@ -603,13 +849,14 @@ private fun FeatureRow(
 }
 
 @Composable
-private fun ChoiceRow(
+private fun OptionalChoiceRow(
     label: String,
     options: List<String>,
     selected: String,
     onSelect: (String) -> Unit
 ) {
     val palette = LocalWorkoutPalette.current
+    val tagKey = label.substringBefore(" ").lowercase()
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
             text = label,
@@ -632,7 +879,7 @@ private fun ChoiceRow(
                         .heightIn(min = 48.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .clickable { onSelect(opt) }
-                        .testTag("choice_${label.lowercase()}_${opt.lowercase()}")
+                        .testTag("choice_${tagKey}_${opt.lowercase()}")
                 ) {
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(horizontal = 6.dp)) {
                         Text(
@@ -644,6 +891,92 @@ private fun ChoiceRow(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun OnboardingPhotoSlotBox(
+    label: String,
+    photoPath: String?,
+    onPick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalWorkoutPalette.current
+    Box(
+        modifier = modifier
+            .aspectRatio(3f / 4f)
+            .clip(RoundedCornerShape(6.dp))
+            .background(palette.surface)
+            .border(1.dp, palette.borderStrong, RoundedCornerShape(6.dp))
+            .clickable(onClick = onPick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (photoPath != null && File(photoPath).exists()) {
+            AsyncImage(
+                model = File(photoPath),
+                contentDescription = "$label progress photo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(48.dp)
+                    .clickable(onClick = onRemove)
+                    .padding(6.dp),
+                contentAlignment = Alignment.TopEnd
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.65f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = "Remove $label photo",
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .padding(vertical = 3.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label.uppercase(),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+        } else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.CameraAlt,
+                    contentDescription = "Add $label photo",
+                    tint = palette.faint,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    text = label.uppercase(),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp,
+                    color = palette.faint
+                )
             }
         }
     }

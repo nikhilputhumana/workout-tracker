@@ -36,6 +36,7 @@ class PreferencesRepository(private val context: Context) {
         val HAS_BODY_FAT = booleanPreferencesKey("profile_has_body_fat")
         val EXPERIENCE = stringPreferencesKey("profile_experience")
         val SPLIT = stringPreferencesKey("profile_split")
+        val REP_RANGE = stringPreferencesKey("profile_rep_range")
         val WEEKLY_TARGET = intPreferencesKey("profile_weekly_target")
         val ONBOARDED = booleanPreferencesKey("onboarding_complete")
 
@@ -43,8 +44,11 @@ class PreferencesRepository(private val context: Context) {
         val CHEST_CM = doublePreferencesKey("measure_chest_cm")
         val ARM_CM = doublePreferencesKey("measure_arm_cm")
         val PHOTO_FRONT = stringPreferencesKey("photo_front_path")
+        val PHOTO_FRONT_DATE = stringPreferencesKey("photo_front_date")
         val PHOTO_SIDE = stringPreferencesKey("photo_side_path")
+        val PHOTO_SIDE_DATE = stringPreferencesKey("photo_side_date")
         val PHOTO_BACK = stringPreferencesKey("photo_back_path")
+        val PHOTO_BACK_DATE = stringPreferencesKey("photo_back_date")
 
         val FEE_LAST_PAID = stringPreferencesKey("fee_last_paid")
         val FEE_NEXT_DUE = stringPreferencesKey("fee_next_due")
@@ -57,26 +61,42 @@ class PreferencesRepository(private val context: Context) {
         val hasBf = prefs[Keys.HAS_BODY_FAT] ?: false
         UserProfile(
             name = prefs[Keys.NAME] ?: "",
-            age = prefs[Keys.AGE] ?: 26,
-            gender = prefs[Keys.GENDER] ?: "Male",
+            age = prefs[Keys.AGE],
+            gender = prefs[Keys.GENDER] ?: "",
             heightCm = prefs[Keys.HEIGHT_CM] ?: 175,
             bodyWeightKg = prefs[Keys.WEIGHT_KG] ?: 74.5,
             bodyFatPercent = if (hasBf) prefs[Keys.BODY_FAT] else null,
-            experienceLevel = prefs[Keys.EXPERIENCE] ?: "Intermediate",
+            experienceLevel = prefs[Keys.EXPERIENCE] ?: "",
             preferredSplit = prefs[Keys.SPLIT] ?: "Push / Pull / Legs (PPL)",
+            preferredRepRange = prefs[Keys.REP_RANGE]?.takeIf { it.isNotBlank() } ?: "15-12-10-8",
             weeklyTargetSessions = (prefs[Keys.WEEKLY_TARGET] ?: 4).coerceIn(1, 7),
             onboardingComplete = prefs[Keys.ONBOARDED] ?: false
         )
     }
 
     val measurementsFlow: Flow<BodyMeasurements> = context.dataStore.data.map { prefs ->
+        fun resolvePhoto(
+            pathKey: Preferences.Key<String>,
+            dateKey: Preferences.Key<String>
+        ): Pair<String?, String?> {
+            val path = prefs[pathKey]?.takeIf { File(it).exists() } ?: return null to null
+            val stored = prefs[dateKey]?.takeIf { WorkoutMath.isValidIsoDate(it) }
+            val resolvedDate = stored ?: WorkoutMath.isoFromEpochMillis(File(path).lastModified())
+            return path to resolvedDate
+        }
+        val (frontPath, frontDate) = resolvePhoto(Keys.PHOTO_FRONT, Keys.PHOTO_FRONT_DATE)
+        val (sidePath, sideDate) = resolvePhoto(Keys.PHOTO_SIDE, Keys.PHOTO_SIDE_DATE)
+        val (backPath, backDate) = resolvePhoto(Keys.PHOTO_BACK, Keys.PHOTO_BACK_DATE)
         BodyMeasurements(
-            waistCm = prefs[Keys.WAIST_CM] ?: 82.0,
-            chestCm = prefs[Keys.CHEST_CM] ?: 102.0,
-            armCm = prefs[Keys.ARM_CM] ?: 35.0,
-            frontPhotoPath = prefs[Keys.PHOTO_FRONT]?.takeIf { File(it).exists() },
-            sidePhotoPath = prefs[Keys.PHOTO_SIDE]?.takeIf { File(it).exists() },
-            backPhotoPath = prefs[Keys.PHOTO_BACK]?.takeIf { File(it).exists() }
+            waistCm = prefs[Keys.WAIST_CM],
+            chestCm = prefs[Keys.CHEST_CM],
+            armCm = prefs[Keys.ARM_CM],
+            frontPhotoPath = frontPath,
+            frontPhotoDateIso = frontDate,
+            sidePhotoPath = sidePath,
+            sidePhotoDateIso = sideDate,
+            backPhotoPath = backPath,
+            backPhotoDateIso = backDate
         )
     }
 
@@ -99,8 +119,16 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveProfile(profile: UserProfile) {
         context.dataStore.edit { prefs ->
             prefs[Keys.NAME] = profile.name.trim()
-            prefs[Keys.AGE] = profile.age
-            prefs[Keys.GENDER] = profile.gender
+            if (profile.age != null) {
+                prefs[Keys.AGE] = profile.age
+            } else {
+                prefs.remove(Keys.AGE)
+            }
+            if (profile.gender.isNotBlank()) {
+                prefs[Keys.GENDER] = profile.gender.trim()
+            } else {
+                prefs.remove(Keys.GENDER)
+            }
             prefs[Keys.HEIGHT_CM] = profile.heightCm
             prefs[Keys.WEIGHT_KG] = profile.bodyWeightKg
             if (profile.bodyFatPercent != null) {
@@ -108,9 +136,15 @@ class PreferencesRepository(private val context: Context) {
                 prefs[Keys.BODY_FAT] = profile.bodyFatPercent
             } else {
                 prefs[Keys.HAS_BODY_FAT] = false
+                prefs.remove(Keys.BODY_FAT)
             }
-            prefs[Keys.EXPERIENCE] = profile.experienceLevel
+            if (profile.experienceLevel.isNotBlank()) {
+                prefs[Keys.EXPERIENCE] = profile.experienceLevel.trim()
+            } else {
+                prefs.remove(Keys.EXPERIENCE)
+            }
             prefs[Keys.SPLIT] = profile.preferredSplit
+            prefs[Keys.REP_RANGE] = profile.preferredRepRange.trim().ifBlank { "15-12-10-8" }
             prefs[Keys.WEEKLY_TARGET] = profile.weeklyTargetSessions.coerceIn(1, 7)
             prefs[Keys.ONBOARDED] = profile.onboardingComplete
         }
@@ -128,11 +162,11 @@ class PreferencesRepository(private val context: Context) {
         }
     }
 
-    suspend fun saveMeasurements(waistCm: Double, chestCm: Double, armCm: Double) {
+    suspend fun saveMeasurements(waistCm: Double?, chestCm: Double?, armCm: Double?) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.WAIST_CM] = waistCm
-            prefs[Keys.CHEST_CM] = chestCm
-            prefs[Keys.ARM_CM] = armCm
+            if (waistCm != null) prefs[Keys.WAIST_CM] = waistCm else prefs.remove(Keys.WAIST_CM)
+            if (chestCm != null) prefs[Keys.CHEST_CM] = chestCm else prefs.remove(Keys.CHEST_CM)
+            if (armCm != null) prefs[Keys.ARM_CM] = armCm else prefs.remove(Keys.ARM_CM)
         }
     }
 
@@ -182,11 +216,21 @@ class PreferencesRepository(private val context: Context) {
                 ?.filter { it.name.startsWith("${slot.name.lowercase()}_") && it.absolutePath != dest.absolutePath }
                 ?.forEach { it.delete() }
 
+            val savedIso = WorkoutMath.todayIso()
             context.dataStore.edit { prefs ->
                 when (slot) {
-                    PhotoSlot.FRONT -> prefs[Keys.PHOTO_FRONT] = dest.absolutePath
-                    PhotoSlot.SIDE -> prefs[Keys.PHOTO_SIDE] = dest.absolutePath
-                    PhotoSlot.BACK -> prefs[Keys.PHOTO_BACK] = dest.absolutePath
+                    PhotoSlot.FRONT -> {
+                        prefs[Keys.PHOTO_FRONT] = dest.absolutePath
+                        prefs[Keys.PHOTO_FRONT_DATE] = savedIso
+                    }
+                    PhotoSlot.SIDE -> {
+                        prefs[Keys.PHOTO_SIDE] = dest.absolutePath
+                        prefs[Keys.PHOTO_SIDE_DATE] = savedIso
+                    }
+                    PhotoSlot.BACK -> {
+                        prefs[Keys.PHOTO_BACK] = dest.absolutePath
+                        prefs[Keys.PHOTO_BACK_DATE] = savedIso
+                    }
                 }
             }
             dest.absolutePath
@@ -198,18 +242,27 @@ class PreferencesRepository(private val context: Context) {
             ?.forEach { it.delete() }
         context.dataStore.edit { prefs ->
             when (slot) {
-                PhotoSlot.FRONT -> prefs.remove(Keys.PHOTO_FRONT)
-                PhotoSlot.SIDE -> prefs.remove(Keys.PHOTO_SIDE)
-                PhotoSlot.BACK -> prefs.remove(Keys.PHOTO_BACK)
+                PhotoSlot.FRONT -> {
+                    prefs.remove(Keys.PHOTO_FRONT)
+                    prefs.remove(Keys.PHOTO_FRONT_DATE)
+                }
+                PhotoSlot.SIDE -> {
+                    prefs.remove(Keys.PHOTO_SIDE)
+                    prefs.remove(Keys.PHOTO_SIDE_DATE)
+                }
+                PhotoSlot.BACK -> {
+                    prefs.remove(Keys.PHOTO_BACK)
+                    prefs.remove(Keys.PHOTO_BACK_DATE)
+                }
             }
         }
     }
 
     suspend fun restoreFromBackup(
         profile: UserProfile,
-        waistCm: Double,
-        chestCm: Double,
-        armCm: Double,
+        waistCm: Double?,
+        chestCm: Double?,
+        armCm: Double?,
         feeRecord: GymFeeRecord
     ) {
         saveProfile(profile.copy(onboardingComplete = true))

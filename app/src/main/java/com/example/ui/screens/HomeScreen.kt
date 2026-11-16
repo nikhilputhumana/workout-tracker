@@ -522,7 +522,7 @@ fun HomeScreen(
                             color = palette.text
                         )
                         Text(
-                            text = "Tap Create workout above to log today's session, or import an existing JSON backup from Settings.",
+                            text = "Tap Create workout above to log today's session, or import an existing JSON backup from Profile.",
                             style = MaterialTheme.typography.bodySmall,
                             color = palette.muted
                         )

@@ -17,6 +17,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM body_weight_entries ORDER BY dateIso ASC, id ASC")
     fun observeBodyWeightEntries(): Flow<List<BodyWeightEntity>>
 
+    @Query("SELECT * FROM body_measurement_entries ORDER BY dateIso ASC, id ASC")
+    fun observeMeasurementEntries(): Flow<List<BodyMeasurementEntity>>
+
     @Query("SELECT * FROM custom_exercises ORDER BY name ASC")
     fun observeCustomExercises(): Flow<List<CustomExerciseEntity>>
 
@@ -31,6 +34,9 @@ interface WorkoutDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBodyWeight(entry: BodyWeightEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMeasurementEntry(entry: BodyMeasurementEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomExercise(exercise: CustomExerciseEntity)
@@ -50,6 +56,9 @@ interface WorkoutDao {
 
     @Query("DELETE FROM body_weight_entries")
     suspend fun clearBodyWeightEntries()
+
+    @Query("DELETE FROM body_measurement_entries")
+    suspend fun clearMeasurementEntries()
 
     @Query("DELETE FROM custom_exercises")
     suspend fun clearCustomExercises()
@@ -86,13 +95,16 @@ interface WorkoutDao {
     suspend fun replaceAllData(
         sessions: List<Pair<WorkoutSessionEntity, List<Pair<LoggedExerciseEntity, List<LoggedSetEntity>>>>>,
         bodyWeights: List<BodyWeightEntity>,
-        customExercises: List<CustomExerciseEntity>
+        customExercises: List<CustomExerciseEntity>,
+        measurementEntries: List<BodyMeasurementEntity> = emptyList()
     ) {
         clearSessions()
         clearBodyWeightEntries()
+        clearMeasurementEntries()
         clearCustomExercises()
         customExercises.forEach { insertCustomExercise(it) }
         bodyWeights.forEach { insertBodyWeight(it) }
+        measurementEntries.forEach { insertMeasurementEntry(it) }
         sessions.forEach { (session, exList) ->
             insertFullSession(session, exList)
         }

@@ -23,10 +23,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -40,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -47,18 +54,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.domain.ExerciseCatalog
 import com.example.domain.LoggedExercise
+import com.example.domain.PhotoSlot
 import com.example.domain.WorkoutMath
 import com.example.ui.components.BorderedCard
 import com.example.ui.components.KpiTile
 import com.example.ui.components.LineChartPoint
+import com.example.ui.components.MultiLineChart
+import com.example.ui.components.MultiLineSeries
 import com.example.ui.components.SectionLabel
 import com.example.ui.components.TrendLineChart
 import com.example.ui.components.VolumeBarChart
 import com.example.ui.components.VolumeBarPoint
 import com.example.ui.theme.LocalWorkoutPalette
 import com.example.ui.viewmodel.MainUiState
+import java.io.File
 import java.util.Locale
 import kotlin.math.abs
 
@@ -74,6 +87,7 @@ fun StatsScreen(
     var weightInputError by remember { mutableStateOf<String?>(null) }
     var liftedShowLast by remember { mutableStateOf(false) }
     var caloriesShowLast by remember { mutableStateOf(false) }
+    var previewPhoto by remember { mutableStateOf<Triple<String, String, String?>?>(null) }
     val todayIso = WorkoutMath.todayIso()
 
     val clubbed = remember(uiState.sessions) {
@@ -426,6 +440,307 @@ fun StatsScreen(
             }
         }
 
+        // Body Fat % Graph Card
+        item {
+            val bfLogPoints = remember(uiState.measurementLog, uiState.profile.bodyFatPercent, todayIso) {
+                val fromLog = uiState.measurementLog.mapNotNull { entry ->
+                    entry.bodyFatPercent?.let {
+                        LineChartPoint(
+                            label = WorkoutMath.formatDayMonth(entry.dateIso),
+                            value = it.toFloat(),
+                            unit = "%"
+                        )
+                    }
+                }
+                if (fromLog.isNotEmpty()) fromLog
+                else uiState.profile.bodyFatPercent?.let { bf ->
+                    listOf(
+                        LineChartPoint(
+                            label = WorkoutMath.formatDayMonth(todayIso),
+                            value = bf.toFloat(),
+                            unit = "%"
+                        )
+                    )
+                } ?: emptyList()
+            }
+            val bfDelta = remember(bfLogPoints) {
+                if (bfLogPoints.size >= 2) {
+                    val diff = (bfLogPoints.last().value - bfLogPoints.first().value).toDouble()
+                    if (abs(diff) < 0.05) 0.0 else diff
+                } else null
+            }
+
+            BorderedCard(modifier = Modifier.testTag("stats_body_fat_card")) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionLabel("Body fat %")
+                        val latestBfText = uiState.profile.bodyFatPercent?.let { "${WorkoutMath.formatKg(it)}%" }
+                        val deltaStr = bfDelta?.let { d ->
+                            " (${if (d > 0) "+" else ""}${String.format(Locale.US, "%.1f", d)}%)"
+                        } ?: ""
+                        if (latestBfText != null) {
+                            Text(
+                                text = "$latestBfText$deltaStr",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = if ((bfDelta ?: 0.0) < 0) palette.greenInk else palette.muted
+                            )
+                        }
+                    }
+
+                    if (bfLogPoints.isNotEmpty()) {
+                        TrendLineChart(points = bfLogPoints, chartHeight = 80.dp)
+                    } else {
+                        Text(
+                            text = "Add your Fat % in Profile to start tracking your body fat trend.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.muted
+                        )
+                    }
+                }
+            }
+        }
+
+        // Height Graph Card
+        item {
+            val heightLogPoints = remember(uiState.measurementLog, uiState.profile.heightCm, todayIso) {
+                val fromLog = uiState.measurementLog.mapNotNull { entry ->
+                    entry.heightCm?.let {
+                        LineChartPoint(
+                            label = WorkoutMath.formatDayMonth(entry.dateIso),
+                            value = it.toFloat(),
+                            unit = " cm"
+                        )
+                    }
+                }
+                if (fromLog.isNotEmpty()) fromLog
+                else listOf(
+                    LineChartPoint(
+                        label = WorkoutMath.formatDayMonth(todayIso),
+                        value = uiState.profile.heightCm.toFloat(),
+                        unit = " cm"
+                    )
+                )
+            }
+            val heightDelta = remember(heightLogPoints) {
+                if (heightLogPoints.size >= 2) {
+                    val diff = (heightLogPoints.last().value - heightLogPoints.first().value).toDouble()
+                    if (abs(diff) < 0.05) 0.0 else diff
+                } else null
+            }
+
+            BorderedCard(modifier = Modifier.testTag("stats_height_card")) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionLabel("Height")
+                        val deltaStr = heightDelta?.let { d ->
+                            " (${if (d > 0) "+" else ""}${String.format(Locale.US, "%.1f", d)} cm)"
+                        } ?: ""
+                        Text(
+                            text = "${uiState.profile.heightCm} cm$deltaStr",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.muted
+                        )
+                    }
+                    TrendLineChart(points = heightLogPoints, chartHeight = 80.dp)
+                }
+            }
+        }
+
+        // Body Measurements Card (Single Combined Graph for Waist, Chest, Arm)
+        item {
+            val measures = uiState.measurements
+            val tapeLog = remember(uiState.measurementLog) {
+                uiState.measurementLog.filter {
+                    it.waistCm != null || it.chestCm != null || it.armCm != null
+                }
+            }
+            val dateLabels = remember(tapeLog) {
+                tapeLog.map { WorkoutMath.formatDayMonth(it.dateIso) }
+            }
+            val waistValues = remember(tapeLog) { tapeLog.map { it.waistCm?.toFloat() } }
+            val chestValues = remember(tapeLog) { tapeLog.map { it.chestCm?.toFloat() } }
+            val armValues = remember(tapeLog) { tapeLog.map { it.armCm?.toFloat() } }
+
+            fun seriesDeltaLabel(values: List<Float?>): String? {
+                val clean = values.filterNotNull()
+                if (clean.size < 2) return null
+                val diff = (clean.last() - clean.first()).toDouble()
+                val rounded = if (abs(diff) < 0.05) 0.0 else diff
+                return "${if (rounded > 0) "+" else ""}${String.format(Locale.US, "%.1f", rounded)} cm"
+            }
+
+            BorderedCard(modifier = Modifier.testTag("stats_body_measurements_card")) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SectionLabel("Body measurements · Waist, Chest & Arm")
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MeasureSummaryTile(
+                            label = "Waist",
+                            value = measures.waistCm?.let { "${WorkoutMath.formatKg(it)} cm" } ?: "—",
+                            delta = seriesDeltaLabel(waistValues),
+                            accentColor = palette.brand,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("stats_measure_pill_waist")
+                        )
+                        MeasureSummaryTile(
+                            label = "Chest",
+                            value = measures.chestCm?.let { "${WorkoutMath.formatKg(it)} cm" } ?: "—",
+                            delta = seriesDeltaLabel(chestValues),
+                            accentColor = palette.greenMid,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("stats_measure_pill_chest")
+                        )
+                        MeasureSummaryTile(
+                            label = "Arm",
+                            value = measures.armCm?.let { "${WorkoutMath.formatKg(it)} cm" } ?: "—",
+                            delta = seriesDeltaLabel(armValues),
+                            accentColor = palette.orange,
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("stats_measure_pill_arm")
+                        )
+                    }
+
+                    if (tapeLog.isNotEmpty()) {
+                        MultiLineChart(
+                            dateLabels = dateLabels,
+                            series = listOf(
+                                MultiLineSeries("Waist", palette.brand, waistValues),
+                                MultiLineSeries("Chest", palette.greenMid, chestValues),
+                                MultiLineSeries("Arm", palette.orange, armValues)
+                            ),
+                            unit = " cm",
+                            chartHeight = 110.dp,
+                            modifier = Modifier.testTag("stats_measurements_multichart")
+                        )
+                    } else {
+                        Text(
+                            text = "Add Waist, Chest, or Arm measurements in Profile to view the combined trend chart here.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = palette.muted
+                        )
+                    }
+                }
+            }
+        }
+
+        // Progress Photos Card (Below Measurements, With Dates)
+        item {
+            data class DatedPhoto(val label: String, val path: String, val dateIso: String?)
+            val savedPhotos = PhotoSlot.entries.mapNotNull { slot ->
+                val (path, dateIso) = when (slot) {
+                    PhotoSlot.FRONT -> uiState.measurements.frontPhotoPath to uiState.measurements.frontPhotoDateIso
+                    PhotoSlot.SIDE -> uiState.measurements.sidePhotoPath to uiState.measurements.sidePhotoDateIso
+                    PhotoSlot.BACK -> uiState.measurements.backPhotoPath to uiState.measurements.backPhotoDateIso
+                }
+                if (path != null && File(path).exists()) DatedPhoto(slot.label, path, dateIso) else null
+            }
+
+            BorderedCard(modifier = Modifier.testTag("stats_progress_photos_card")) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SectionLabel("Progress photos")
+                    if (savedPhotos.isEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = null,
+                                tint = palette.faint,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Add optional Front, Side, or Back photos in Profile to compare progress with dates here.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = palette.muted
+                            )
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            savedPhotos.forEach { photo ->
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .aspectRatio(3f / 4f)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .border(1.dp, palette.borderStrong, RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            previewPhoto = Triple(photo.label, photo.path, photo.dateIso)
+                                        }
+                                        .testTag("stats_photo_${photo.label.lowercase()}")
+                                ) {
+                                    AsyncImage(
+                                        model = File(photo.path),
+                                        contentDescription = "${photo.label} progress photo",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .fillMaxWidth()
+                                            .background(Color.Black.copy(alpha = 0.62f))
+                                            .padding(vertical = 4.dp, horizontal = 4.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = photo.label.uppercase(),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        )
+                                        if (!photo.dateIso.isNullOrBlank()) {
+                                            Text(
+                                                text = WorkoutMath.formatShort(photo.dateIso),
+                                                fontSize = 9.sp,
+                                                color = Color.White.copy(alpha = 0.92f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            repeat((3 - savedPhotos.size).coerceAtLeast(0)) {
+                                Spacer(Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             BorderedCard {
                 Column(
@@ -570,6 +885,111 @@ fun StatsScreen(
 
         item { Spacer(Modifier.height(6.dp)) }
     }
+
+    previewPhoto?.let { (label, path, dateIso) ->
+        Dialog(onDismissRequest = { previewPhoto = null }) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = palette.surface,
+                border = BorderStroke(1.dp, palette.borderStrong)
+            ) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "$label progress photo",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.text
+                            )
+                            if (!dateIso.isNullOrBlank()) {
+                                Text(
+                                    text = WorkoutMath.formatLong(dateIso),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = palette.muted
+                                )
+                            }
+                        }
+                        IconButton(onClick = { previewPhoto = null }) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = "Close preview",
+                                tint = palette.text
+                            )
+                        }
+                    }
+                    AsyncImage(
+                        model = File(path),
+                        contentDescription = "$label progress photo full view",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(3f / 4f)
+                            .clip(RoundedCornerShape(8.dp))
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MeasureSummaryTile(
+    label: String,
+    value: String,
+    delta: String?,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    val palette = LocalWorkoutPalette.current
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = palette.appBg,
+        border = BorderStroke(1.dp, palette.border),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                )
+                Text(
+                    text = label.uppercase(),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.faint
+                )
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = "tnum"),
+                fontWeight = FontWeight.SemiBold,
+                color = palette.text,
+                maxLines = 1
+            )
+            if (delta != null) {
+                Text(
+                    text = delta,
+                    fontSize = 11.sp,
+                    color = palette.muted,
+                    maxLines = 1
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -601,3 +1021,4 @@ private fun ModeTogglePill(
         }
     }
 }
+

@@ -79,6 +79,7 @@ import com.example.ui.theme.LocalWorkoutPalette
 fun LiveSessionScreen(
     draft: ActiveDraft,
     bodyWeightKg: Double,
+    preferredRepRange: String = "15-12-10-8",
     allExercises: List<ExerciseDefinition>,
     suggestedExercises: List<Pair<ExerciseDefinition, Int>>,
     lastSessionOf: (String) -> Pair<String, LoggedExercise>?,
@@ -104,14 +105,14 @@ fun LiveSessionScreen(
 ) {
     val palette = LocalWorkoutPalette.current
     val isEditing = draft.editingSessionIds.isNotEmpty()
+    val onlyDone = !isEditing
     var quickSearch by remember { mutableStateOf("") }
     var showDiscardDialog by remember { mutableStateOf(false) }
-    var showFinishDialog by remember { mutableStateOf(false) }
 
-    val totalVol = WorkoutMath.draftVolume(draft, allExercises)
-    val totalSets = WorkoutMath.draftSetCount(draft)
+    val totalVol = WorkoutMath.draftVolume(draft, allExercises, onlyCompleted = onlyDone)
+    val totalSets = WorkoutMath.draftSetCount(draft, onlyCompleted = onlyDone)
     val timerStr = WorkoutMath.formatTimer(draft.elapsedSeconds)
-    val estKcal = WorkoutMath.estimateDraftCalories(draft, bodyWeightKg, allExercises)
+    val estKcal = WorkoutMath.estimateDraftCalories(draft, bodyWeightKg, allExercises, onlyCompleted = onlyDone)
 
     val draftNames = draft.exercises.map { it.name.lowercase() }.toSet()
     val filteredSuggested = suggestedExercises
@@ -214,6 +215,43 @@ fun LiveSessionScreen(
                 }
             }
 
+            if (!isEditing) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(palette.tealSoft)
+                            .border(1.dp, palette.tealBd, RoundedCornerShape(8.dp))
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .testTag("live_session_tick_reminder_banner"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(palette.green),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                        Text(
+                            text = "Workouts and sets are saved only when you tap the tick (✓) button on the right of each set.",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.text
+                        )
+                    }
+                }
+            }
+
             // Top Previous / All exercises bar
             item {
                 Row(
@@ -310,6 +348,7 @@ fun LiveSessionScreen(
                     exercise = exercise,
                     definition = def,
                     allExercises = allExercises,
+                    preferredRepRange = preferredRepRange,
                     lastSession = last,
                     historicalPrKg = prKg,
                     onRemove = { onRemoveExercise(exercise.localId) },
@@ -528,7 +567,7 @@ fun LiveSessionScreen(
                     Text(if (isEditing) "Cancel" else "Discard", color = palette.faint)
                 }
                 Button(
-                    onClick = { showFinishDialog = true },
+                    onClick = onFinish,
                     enabled = draft.exercises.isNotEmpty(),
                     shape = RoundedCornerShape(6.dp),
                     colors = ButtonDefaults.buttonColors(
@@ -581,43 +620,6 @@ fun LiveSessionScreen(
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
                     Text("Keep editing")
-                }
-            }
-        )
-    }
-
-    if (showFinishDialog) {
-        val volPart = if (totalVol > 0.0) " · ${WorkoutMath.formatVolume(totalVol)}" else ""
-        AlertDialog(
-            onDismissRequest = { showFinishDialog = false },
-            title = { Text(if (isEditing) "Save workout changes?" else "Finish workout?") },
-            text = {
-                Text(
-                    if (isEditing) {
-                        "Update this history workout (${draft.exercises.size} exercises · $totalSets sets$volPart)?"
-                    } else {
-                        "Save this workout to history (${draft.exercises.size} exercises · $totalSets sets$volPart)?"
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showFinishDialog = false
-                        onFinish()
-                    },
-                    modifier = Modifier.testTag("confirm_finish_button")
-                ) {
-                    Text(
-                        text = if (isEditing) "Save changes" else "Finish & save",
-                        color = palette.brand,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showFinishDialog = false }) {
-                    Text("Keep logging")
                 }
             }
         )
@@ -721,6 +723,7 @@ private fun LiveExerciseCard(
     exercise: DraftExercise,
     definition: ExerciseDefinition?,
     allExercises: List<ExerciseDefinition>,
+    preferredRepRange: String,
     lastSession: Pair<String, LoggedExercise>?,
     historicalPrKg: Double,
     onRemove: () -> Unit,
@@ -787,11 +790,14 @@ private fun LiveExerciseCard(
                         }
                     }
                     Spacer(Modifier.height(5.dp))
+                    val starterRepsLabel = remember(preferredRepRange) {
+                        ExerciseCatalog.parseRepRange(preferredRepRange).take(3).joinToString("-")
+                    }
                     Text(
                         text = if (lastSession != null) {
                             "Last: ${WorkoutMath.formatSetSummary(lastSession.second, allExercises)} (${WorkoutMath.formatAgo(lastSession.first)})"
                         } else {
-                            "First time logging · ${if (isCardio) "enter time & distance" else "starts with 15-12-10 pyramid"}"
+                            "First time logging · ${if (isCardio) "enter time & distance" else "starts with $starterRepsLabel reps"}"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = palette.muted

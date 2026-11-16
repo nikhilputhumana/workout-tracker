@@ -43,15 +43,15 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Restaurant
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -102,6 +102,7 @@ import com.example.domain.WorkoutMath
 import com.example.ui.screens.ExerciseDetailScreen
 import com.example.ui.screens.ExerciseLibraryScreen
 import com.example.ui.screens.ExercisePickerScreen
+import com.example.ui.screens.FinishSummaryScreen
 import com.example.ui.screens.FoodPreviewScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.HomeScreen
@@ -125,6 +126,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val NEW_WORKOUT = "new_workout"
     const val LIVE_SESSION = "live_session"
+    const val FINISH_SUMMARY = "finish_summary"
     const val EXERCISE_PICKER = "exercise_picker/{tab}"
     const val PREVIOUS_WORKOUTS = "previous_workouts"
     const val EXERCISE_DETAIL = "exercise_detail/{name}"
@@ -147,7 +149,7 @@ private val MAIN_TABS = listOf(
     BottomNavTab(Routes.LIBRARY, "Exercises", Icons.Filled.FitnessCenter, Icons.Outlined.FitnessCenter),
     BottomNavTab(Routes.STATS, "Stats", Icons.Filled.BarChart, Icons.Outlined.BarChart),
     BottomNavTab(Routes.FOOD, "Food", Icons.Filled.Restaurant, Icons.Outlined.Restaurant),
-    BottomNavTab(Routes.SETTINGS, "Settings", Icons.Filled.Settings, Icons.Outlined.Settings)
+    BottomNavTab(Routes.SETTINGS, "Profile", Icons.Filled.Person, Icons.Outlined.Person)
 )
 
 @Composable
@@ -156,7 +158,9 @@ fun WorkoutTrackerApp(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var pendingOnboardingImport by remember { mutableStateOf<Pair<UserProfile, String>?>(null) }
+    var pendingOnboardingImport by remember {
+        mutableStateOf<Triple<UserProfile, String, Triple<Double?, Double?, Double?>>?>(null)
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/json")
@@ -190,10 +194,14 @@ fun WorkoutTrackerApp(
                 } ?: error("Cannot read selected file")
             }.onSuccess { json ->
                 if (onboardingArgs != null) {
+                    val (prof, feeDue, dims) = onboardingArgs
                     viewModel.importBackupDuringOnboarding(
                         json = json,
-                        pendingProfile = onboardingArgs.first,
-                        nextFeeDueIso = onboardingArgs.second
+                        pendingProfile = prof,
+                        nextFeeDueIso = feeDue,
+                        waistCm = dims.first,
+                        chestCm = dims.second,
+                        armCm = dims.third
                     )
                 } else {
                     viewModel.importBackupJson(json)
@@ -206,7 +214,7 @@ fun WorkoutTrackerApp(
 
     LaunchedEffect(uiState.showLaunchSplash) {
         if (uiState.showLaunchSplash) {
-            delay(1050)
+            delay(50)
             viewModel.dismissLaunchSplash()
         }
     }
@@ -235,15 +243,22 @@ fun WorkoutTrackerApp(
                         Box(modifier = Modifier.padding(innerPadding)) {
                             OnboardingScreen(
                                 initialProfile = uiState.profile,
+                                initialMeasurements = uiState.measurements,
                                 initialNextFeeIso = uiState.gymFee.nextDueIso,
                                 startStep = 1,
                                 isEditOnly = false,
-                                onComplete = { profile, nextDue ->
-                                    viewModel.completeOnboarding(profile, nextDue)
+                                onComplete = { profile, nextDue, waist, chest, arm ->
+                                    viewModel.completeOnboarding(profile, nextDue, waist, chest, arm)
                                 },
-                                onImportLog = { profile, nextDue ->
-                                    pendingOnboardingImport = profile to nextDue
+                                onImportLog = { profile, nextDue, waist, chest, arm ->
+                                    pendingOnboardingImport = Triple(profile, nextDue, Triple(waist, chest, arm))
                                     importLauncher.launch(arrayOf("application/json", "text/plain", "*/*"))
+                                },
+                                onSelectProgressPhoto = { slot, uri ->
+                                    viewModel.saveProgressPhoto(slot, uri)
+                                },
+                                onClearProgressPhoto = { slot ->
+                                    viewModel.clearProgressPhoto(slot)
                                 }
                             )
                             FloatingBannerHost(
@@ -270,9 +285,18 @@ fun WorkoutTrackerApp(
                     val workoutOwnerTab = if (isEditingDraft) Routes.HISTORY else Routes.HOME
                     val isWorkoutFlowRoute = currentRoute == Routes.NEW_WORKOUT ||
                         currentRoute == Routes.LIVE_SESSION ||
+                        currentRoute == Routes.FINISH_SUMMARY ||
                         currentRoute.startsWith("exercise_picker") ||
                         currentRoute == Routes.PREVIOUS_WORKOUTS
                     val showNavBar = currentRoute != Routes.EDIT_PROFILE
+
+                    fun returnToLiveSession() {
+                        if (!navController.popBackStack(Routes.LIVE_SESSION, inclusive = false)) {
+                            navController.navigate(Routes.LIVE_SESSION) {
+                                launchSingleTop = true
+                            }
+                        }
+                    }
 
                     LaunchedEffect(currentRoute, backEntry) {
                         if (isWorkoutFlowRoute) {
@@ -302,11 +326,11 @@ fun WorkoutTrackerApp(
                         currentRoute == Routes.LIBRARY ->
                             "Exercises" to "${uiState.allExercises.size} in the library · your numbers attached"
                         currentRoute == Routes.STATS ->
-                            "Stats" to "Volume, strength and body weight"
+                            "Stats" to "Volume, strength and body tracking"
                         currentRoute == Routes.FOOD ->
                             "Food & calories" to "Nutrition tracking · coming soon"
                         currentRoute == Routes.SETTINGS ->
-                            "Settings" to "Profile, fees, body, data"
+                            "Profile" to "Body metrics, fees, backup, theme"
                         currentRoute == Routes.NEW_WORKOUT ->
                             "New workout" to "Step 1 of 2 · pick muscle groups"
                         currentRoute == Routes.LIVE_SESSION -> {
@@ -320,6 +344,11 @@ fun WorkoutTrackerApp(
                                 val timer = WorkoutMath.formatTimer(draft?.elapsedSeconds ?: 0)
                                 title to "$dateLabel · $timer elapsed"
                             }
+                        }
+                        currentRoute == Routes.FINISH_SUMMARY -> {
+                            val draft = uiState.activeDraft
+                            val dateLabel = WorkoutMath.formatShort(draft?.dateIso ?: WorkoutMath.todayIso())
+                            "Workout summary" to "$dateLabel · review before saving"
                         }
                         currentRoute.startsWith("exercise_picker") ->
                             "Add exercise" to (uiState.activeDraft?.groups?.joinToString(" + ") ?: "")
@@ -360,6 +389,14 @@ fun WorkoutTrackerApp(
                                         null
                                     }
                                     if (resumeTarget != null) {
+                                        val hasLiveOnStack = runCatching {
+                                            navController.getBackStackEntry(Routes.LIVE_SESSION)
+                                        }.isSuccess
+                                        if (resumeTarget != Routes.LIVE_SESSION && !hasLiveOnStack && uiState.activeDraft != null) {
+                                            navController.navigate(Routes.LIVE_SESSION) {
+                                                launchSingleTop = true
+                                            }
+                                        }
                                         navController.navigate(resumeTarget) {
                                             launchSingleTop = true
                                         }
@@ -413,7 +450,16 @@ fun WorkoutTrackerApp(
                                         ) {
                                             if (!isTopLevel) {
                                                 IconButton(
-                                                    onClick = { navController.popBackStack() },
+                                                    onClick = {
+                                                        if (currentRoute == Routes.PREVIOUS_WORKOUTS ||
+                                                            currentRoute.startsWith("exercise_picker") ||
+                                                            currentRoute == Routes.FINISH_SUMMARY
+                                                        ) {
+                                                            returnToLiveSession()
+                                                        } else {
+                                                            navController.popBackStack()
+                                                        }
+                                                    },
                                                     modifier = Modifier.testTag("topbar_back_button")
                                                 ) {
                                                     Icon(
@@ -477,8 +523,8 @@ fun WorkoutTrackerApp(
                                                     modifier = Modifier.testTag("topbar_settings_button")
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Outlined.Settings,
-                                                        contentDescription = "Open settings",
+                                                        imageVector = Icons.Outlined.Person,
+                                                        contentDescription = "Open profile",
                                                         tint = palette.text
                                                     )
                                                 }
@@ -625,8 +671,8 @@ fun WorkoutTrackerApp(
                                                     },
                                                     onResumeDraft = {
                                                         pausedToActualHome = false
-                                                        val target = lastWorkoutRoute ?: Routes.LIVE_SESSION
-                                                        navController.navigate(target) {
+                                                        lastWorkoutRoute = Routes.LIVE_SESSION
+                                                        navController.navigate(Routes.LIVE_SESSION) {
                                                             launchSingleTop = true
                                                         }
                                                     },
@@ -682,6 +728,7 @@ fun WorkoutTrackerApp(
                                                     LiveSessionScreen(
                                                         draft = draft,
                                                         bodyWeightKg = uiState.profile.bodyWeightKg,
+                                                        preferredRepRange = uiState.profile.preferredRepRange,
                                                         allExercises = uiState.allExercises,
                                                         suggestedExercises = viewModel.suggestedExercisesForGroups(draft.groups),
                                                         lastSessionOf = { viewModel.lastSessionOf(it) },
@@ -718,6 +765,31 @@ fun WorkoutTrackerApp(
                                                             }
                                                         },
                                                         onFinish = {
+                                                            navController.navigate(Routes.FINISH_SUMMARY) {
+                                                                launchSingleTop = true
+                                                            }
+                                                        }
+                                                    )
+                                                }
+                                            }
+
+                                            composable(Routes.FINISH_SUMMARY) {
+                                                val draft = uiState.activeDraft
+                                                if (draft == null) {
+                                                    Box(
+                                                        modifier = Modifier.fillMaxSize(),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Text("No active workout", color = palette.muted)
+                                                    }
+                                                } else {
+                                                    FinishSummaryScreen(
+                                                        draft = draft,
+                                                        allSessions = uiState.sessions,
+                                                        allExercises = uiState.allExercises,
+                                                        bodyWeightKg = uiState.profile.bodyWeightKg,
+                                                        onGoBack = { returnToLiveSession() },
+                                                        onFinishAndSave = {
                                                             viewModel.finishDraft { wasEditing ->
                                                                 lastWorkoutRoute = null
                                                                 pausedToActualHome = false
@@ -756,16 +828,16 @@ fun WorkoutTrackerApp(
                                                     lastSessionOf = { viewModel.lastSessionOf(it) },
                                                     onAddExercise = { name ->
                                                         viewModel.addExerciseToDraft(name)
-                                                        navController.popBackStack()
+                                                        returnToLiveSession()
                                                     },
                                                     onAddCustomExercise = { name, grps, eq ->
                                                         viewModel.addCustomExerciseAndAddToDraft(name, grps, eq)
-                                                        navController.popBackStack()
+                                                        returnToLiveSession()
                                                     },
                                                     onAskGeminiAi = { desc -> viewModel.askGeminiForExercise(desc) },
                                                     onAddAiSuggestion = { sug ->
                                                         viewModel.addAiSuggestionToDraft(sug)
-                                                        navController.popBackStack()
+                                                        returnToLiveSession()
                                                     },
                                                     onResetAiLookup = { viewModel.resetAiLookup() },
                                                     onOpenDetail = { name -> navController.navigate(Routes.detail(name)) }
@@ -780,10 +852,10 @@ fun WorkoutTrackerApp(
                                                     draftGroups = groups,
                                                     draftExerciseNames = draftNames,
                                                     allExercises = uiState.allExercises,
-                                                    sessionsMatchingGroups = { viewModel.sessionsMatchingGroups(it) },
+                                                    allSessions = uiState.sessions,
                                                     onAddExerciseToDraft = { name ->
                                                         viewModel.addExerciseToDraft(name)
-                                                        navController.popBackStack()
+                                                        returnToLiveSession()
                                                     }
                                                 )
                                             }
@@ -854,8 +926,8 @@ fun WorkoutTrackerApp(
                                                 SettingsScreen(
                                                     uiState = uiState,
                                                     onEditProfile = { navController.navigate(Routes.EDIT_PROFILE) },
-                                                    onSaveSettingsChanges = { last, next, amt, w, c, a, target ->
-                                                        viewModel.saveSettingsChanges(last, next, amt, w, c, a, target)
+                                                    onSaveSettingsChanges = { last, next, amt, h, bw, bf, w, c, a, target ->
+                                                        viewModel.saveSettingsChanges(last, next, amt, h, bw, bf, w, c, a, target)
                                                     },
                                                     onMarkFeePaidToday = { viewModel.markFeePaidToday() },
                                                     onSelectProgressPhoto = { slot, uri ->
@@ -879,12 +951,19 @@ fun WorkoutTrackerApp(
                                             composable(Routes.EDIT_PROFILE) {
                                                 OnboardingScreen(
                                                     initialProfile = uiState.profile,
+                                                    initialMeasurements = uiState.measurements,
                                                     initialNextFeeIso = uiState.gymFee.nextDueIso,
                                                     startStep = 2,
                                                     isEditOnly = true,
-                                                    onComplete = { updated, _ ->
-                                                        viewModel.updateProfile(updated)
+                                                    onComplete = { updated, _, waist, chest, arm ->
+                                                        viewModel.updateProfile(updated, waist, chest, arm)
                                                         navController.popBackStack()
+                                                    },
+                                                    onSelectProgressPhoto = { slot, uri ->
+                                                        viewModel.saveProgressPhoto(slot, uri)
+                                                    },
+                                                    onClearProgressPhoto = { slot ->
+                                                        viewModel.clearProgressPhoto(slot)
                                                     },
                                                     onCancelEdit = { navController.popBackStack() }
                                                 )
@@ -905,7 +984,7 @@ fun WorkoutTrackerApp(
                 }
             }
 
-            // Quick Cold-Launch Splash Animation (< 1.5s, never replays on background return)
+            // Ultra-fast Cold-Launch Splash Animation (1s shorter than before, never replays on background return)
             AnimatedVisibility(
                 visible = uiState.showLaunchSplash,
                 exit = fadeOut(animationSpec = tween(220))

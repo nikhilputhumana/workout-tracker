@@ -276,4 +276,92 @@ class ExampleUnitTest {
     assertFalse(sanitized.contains('\r'))
     assertTrue(sanitized.startsWith("'Chest' press machine"))
   }
+
+  @Test
+  fun repRangeParsing_and_tickOnlyDraftMath() {
+    assertEquals(listOf(15, 12, 10, 8), ExerciseCatalog.parseRepRange("15-12-10-8"))
+    assertEquals(listOf(12, 10, 8, 6), ExerciseCatalog.parseRepRange("12, 10 / 8 - 6"))
+    assertEquals(listOf(15, 12, 10, 8), ExerciseCatalog.parseRepRange("abc"))
+
+    assertEquals(listOf(15, 12, 10), WorkoutTrackerViewModel.initialRepsForRange("15-12-10-8", count = 3))
+    assertEquals("8", WorkoutTrackerViewModel.nextRepForSetCount(listOf(DraftSet("15", "20"), DraftSet("12", "20"), DraftSet("10", "20")), "15-12-10-8"))
+    assertEquals("6", WorkoutTrackerViewModel.nextRepForSetCount(listOf(DraftSet("12", "20"), DraftSet("10", "20"), DraftSet("8", "20")), "12-10-8-6"))
+
+    val draft = com.example.domain.ActiveDraft(
+      dateIso = "2026-05-01",
+      groups = listOf("Push"),
+      exercises = listOf(
+        com.example.domain.DraftExercise(
+          localId = "1",
+          name = "Barbell bench press",
+          equipment = "Bar",
+          sets = listOf(
+            DraftSet("15", "40", isCompleted = true),
+            DraftSet("12", "50", isCompleted = false),
+            DraftSet("10", "60", isCompleted = false)
+          )
+        )
+      )
+    )
+    assertEquals(1, WorkoutMath.draftSetCount(draft, onlyCompleted = true))
+    assertEquals(600.0, WorkoutMath.draftVolume(draft, ExerciseCatalog.BUILT_IN_EXERCISES, onlyCompleted = true), 0.01)
+    assertEquals(3, WorkoutMath.draftSetCount(draft, onlyCompleted = false))
+  }
+
+  @Test
+  fun backupManager_handlesNullableOptionalProfileAndMeasurementLogs() {
+    val backupManager = BackupManager()
+    val profile = UserProfile(
+      name = "",
+      age = null,
+      gender = "",
+      heightCm = 172,
+      bodyWeightKg = 68.5,
+      bodyFatPercent = null,
+      experienceLevel = "",
+      preferredSplit = "Push Pull Legs",
+      preferredRepRange = "12-10-8-6",
+      onboardingComplete = true
+    )
+    val measures = BodyMeasurements(waistCm = null, chestCm = 98.0, armCm = null)
+    val measureLogs = listOf(
+      com.example.domain.BodyMeasurementEntry(
+        id = 1L,
+        dateIso = "2026-05-01",
+        waistCm = null,
+        chestCm = 98.0,
+        armCm = null,
+        heightCm = 172,
+        bodyFatPercent = 16.5
+      )
+    )
+    val json = backupManager.serialize(
+      profile = profile,
+      measures = measures,
+      fees = GymFeeRecord(),
+      bodyWeightLog = emptyList(),
+      sessions = emptyList(),
+      customExercises = emptyList(),
+      measurementLog = measureLogs
+    )
+    val restored = backupManager.deserialize(json)
+    assertNull(restored.profile?.age)
+    assertEquals("", restored.profile?.gender)
+    assertEquals("12-10-8-6", restored.profile?.repRange)
+    assertNull(restored.measures?.waist)
+    assertEquals(98.0, restored.measures?.chest ?: 0.0, 0.01)
+    assertEquals(1, restored.measurementLog.size)
+    assertEquals(172, restored.measurementLog.first().height)
+    assertEquals(16.5, restored.measurementLog.first().bf ?: 0.0, 0.01)
+  }
+
+  @Test
+  fun workoutMath_bmiAndEpochDateCalculations() {
+    assertEquals(20.0, WorkoutMath.calculateBmi(80.0, 200), 0.01)
+    assertEquals("Underweight", WorkoutMath.bmiCategory(17.5))
+    assertEquals("Normal", WorkoutMath.bmiCategory(22.0))
+    assertEquals("Overweight", WorkoutMath.bmiCategory(27.0))
+    assertEquals("Obese", WorkoutMath.bmiCategory(32.0))
+    assertTrue(WorkoutMath.isValidIsoDate(WorkoutMath.isoFromEpochMillis(1_746_000_000_000L)))
+  }
 }

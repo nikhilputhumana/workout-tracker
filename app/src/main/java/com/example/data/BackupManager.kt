@@ -1,5 +1,6 @@
 package com.example.data
 
+import com.example.domain.BodyMeasurementEntry
 import com.example.domain.BodyMeasurements
 import com.example.domain.BodyWeightEntry
 import com.example.domain.ExerciseDefinition
@@ -40,21 +41,32 @@ data class BackupSessionDto(
 @JsonClass(generateAdapter = true)
 data class BackupProfileDto(
     val name: String,
-    val age: Int,
-    val gender: String,
+    val age: Int? = null,
+    val gender: String = "",
     val height: Int,
     val weight: Double,
     val bf: Double? = null,
-    val level: String = "Intermediate",
+    val level: String = "",
     val split: String = "Push / Pull / Legs (PPL)",
+    val repRange: String = "15-12-10-8",
     val weeklyTarget: Int = 4
 )
 
 @JsonClass(generateAdapter = true)
 data class BackupMeasuresDto(
-    val waist: Double,
-    val chest: Double,
-    val arm: Double
+    val waist: Double? = null,
+    val chest: Double? = null,
+    val arm: Double? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class BackupMeasurementLogDto(
+    val date: String,
+    val waist: Double? = null,
+    val chest: Double? = null,
+    val arm: Double? = null,
+    val height: Int? = null,
+    val bf: Double? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -89,6 +101,7 @@ data class BackupPayloadDto(
     val measures: BackupMeasuresDto? = null,
     val fees: BackupFeesDto? = null,
     val bodyWeightLog: List<BackupBodyWeightDto> = emptyList(),
+    val measurementLog: List<BackupMeasurementLogDto> = emptyList(),
     val sessions: List<BackupSessionDto>,
     val customExercises: List<BackupCustomExerciseDto> = emptyList()
 )
@@ -106,7 +119,8 @@ class BackupManager {
         fees: GymFeeRecord,
         bodyWeightLog: List<BodyWeightEntry>,
         sessions: List<WorkoutSession>,
-        customExercises: List<ExerciseDefinition>
+        customExercises: List<ExerciseDefinition>,
+        measurementLog: List<BodyMeasurementEntry> = emptyList()
     ): String {
         val payload = BackupPayloadDto(
             exportedAt = WorkoutMath.todayIso(),
@@ -119,6 +133,7 @@ class BackupManager {
                 bf = profile.bodyFatPercent,
                 level = profile.experienceLevel,
                 split = profile.preferredSplit,
+                repRange = profile.preferredRepRange,
                 weeklyTarget = profile.weeklyTargetSessions
             ),
             measures = BackupMeasuresDto(
@@ -132,6 +147,16 @@ class BackupManager {
                 amount = fees.amount
             ),
             bodyWeightLog = bodyWeightLog.map { BackupBodyWeightDto(it.dateIso, it.weightKg) },
+            measurementLog = measurementLog.map {
+                BackupMeasurementLogDto(
+                    date = it.dateIso,
+                    waist = it.waistCm,
+                    chest = it.chestCm,
+                    arm = it.armCm,
+                    height = it.heightCm,
+                    bf = it.bodyFatPercent
+                )
+            },
             sessions = sessions.map { s ->
                 BackupSessionDto(
                     date = s.dateIso,
